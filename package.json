@@ -1,0 +1,30 @@
+{
+  "name": "entre-la-escuadra-y-el-compas",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "cap:add:android": "cap add android",
+    "cap:add:ios": "cap add ios",
+    "cap:sync": "cap sync"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0",
+    "pinia": "^2.1.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "firebase": "^10.12.0",
+    "agora-rtc-sdk-ng": "^4.21.0"
+  },
+  "devDependencies": {
+    "vite": "^5.3.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vue-tsc": "^2.0.0",
+    "@capacitor/cli": "^6.0.0"
+  }
+}

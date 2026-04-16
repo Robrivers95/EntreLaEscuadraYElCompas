@@ -1,0 +1,220 @@
+/* Masonic Theme CSS */
+:root {
+  --masonic-dark: #1a0a00;
+  --masonic-gold: #c9a84c;
+  --masonic-gold-dark: #8b6914;
+  --masonic-text: #f0e6c8;
+  --masonic-gold-light: #e8d9b8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--masonic-dark);
+  color: var(--masonic-text);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  letter-spacing: 0.3px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(26, 10, 0, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9a84c;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f0e6c8;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--masonic-gold);
+  letter-spacing: 1px;
+}
+
+p {
+  color: var(--masonic-text);
+}
+
+a {
+  color: var(--masonic-gold);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--masonic-gold-light);
+}
+
+/* Form Elements */
+input,
+textarea,
+select {
+  background-color: rgba(201, 168, 76, 0.1);
+  border: 1px solid var(--masonic-gold-dark);
+  color: var(--masonic-text);
+  padding: 10px;
+  border-radius: 5px;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  background-color: rgba(201, 168, 76, 0.2);
+  border-color: var(--masonic-gold);
+  box-shadow: 0 0 10px rgba(201, 168, 76, 0.3);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(240, 230, 200, 0.5);
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* Utility Classes */
+.masonic-border {
+  border: 2px solid var(--masonic-gold);
+  border-radius: 8px;
+}
+
+.masonic-shadow {
+  box-shadow: 0 0 20px rgba(201, 168, 76, 0.2);
+}
+
+.masonic-gradient {
+  background: linear-gradient(135deg, var(--masonic-gold) 0%, var(--masonic-gold-dark) 100%);
+}
+
+.text-gold {
+  color: var(--masonic-gold);
+}
+
+.text-light {
+  color: var(--masonic-text);
+}
+
+.text-dark {
+  color: var(--masonic-dark);
+}
+
+/* Masonic Symbols and Decorations */
+.symbol-compass::before {
+  content: '⧖';
+}
+
+.symbol-square::before {
+  content: '⚒';
+}
+
+.symbol-triangle::before {
+  content: '△';
+}
+
+.symbol-moon::before {
+  content: '☽';
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.slide-in {
+  animation: slideIn 0.5s ease-in-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  :root {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  h2 {
+    font-size: 20px;
+  }
+
+  h3 {
+    font-size: 18px;
+  }
+}
+
+/* Dark Mode - Already built-in with the dark theme */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--masonic-dark);
+    color: var(--masonic-text);
+  }
+}
