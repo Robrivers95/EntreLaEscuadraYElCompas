@@ -7,6 +7,12 @@ const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'Login', component: () => import('@/views/Login.vue') },
   // Accounts are created and graded in Registro Logia, not in this game.
   { path: '/signup', redirect: '/login' },
+  // Backward compatibility with the original deployed URL:
+  // /lobby?mode=turns and /lobby?mode=realtime.
+  {
+    path: '/lobby',
+    redirect: (to) => to.query.mode === 'realtime' ? '/game/realtime' : '/game/turns',
+  },
   { path: '/game-select', name: 'GameSelect', component: () => import('@/views/GameSelect.vue'), meta: { requiresAuth: true } },
   { path: '/game/realtime', name: 'RealtimeGameView', component: () => import('@/views/RealtimeGameView.vue'), meta: { requiresAuth: true } },
   { path: '/game/turns', name: 'TurnsGameView', component: () => import('@/views/TurnsGameView.vue'), meta: { requiresAuth: true } },
