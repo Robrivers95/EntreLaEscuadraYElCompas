@@ -56,10 +56,14 @@ const getPlayersAtPosition = (position: number) => {
       index,
       name: player.name,
       color: player.color || fallbackColors[index % fallbackColors.length],
-      position: player.position,
+      playerPosition: player.position,
     }))
-    .filter((player) => player.position === position)
-    .map(({ position: _position, ...player }) => player)
+    .filter((player) => player.playerPosition === position)
+    .map((player) => ({
+      index: player.index,
+      name: player.name,
+      color: player.color,
+    }))
 }
 </script>
 
