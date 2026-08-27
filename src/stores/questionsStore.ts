@@ -30,9 +30,18 @@ export const useQuestionsStore = defineStore('questions', () => {
     return Array.from(new Set(questions.value.map((q) => q.category))).sort()
   })
 
+  const useDefaults = () => {
+    questions.value = DEFAULT_QUESTIONS.map((question) => ({ ...question }))
+    usingDefaultQuestions.value = true
+  }
+
   const loadQuestions = async (options: LoadQuestionsOptions = {}) => {
     const { force = false, fallbackToDefaults = true } = options
-    if (loaded.value && !force) return
+
+    if (loaded.value && !force) {
+      if (fallbackToDefaults && questions.value.length === 0) useDefaults()
+      return
+    }
 
     loading.value = true
     error.value = null
@@ -42,8 +51,7 @@ export const useQuestionsStore = defineStore('questions', () => {
         questions.value = remoteQuestions
         usingDefaultQuestions.value = false
       } else if (fallbackToDefaults) {
-        questions.value = DEFAULT_QUESTIONS.map((question) => ({ ...question }))
-        usingDefaultQuestions.value = true
+        useDefaults()
       } else {
         questions.value = []
         usingDefaultQuestions.value = false
@@ -53,8 +61,7 @@ export const useQuestionsStore = defineStore('questions', () => {
       console.error('Error loading questions:', err)
       error.value = 'No se pudo cargar el banco de preguntas desde Firebase.'
       if (fallbackToDefaults) {
-        questions.value = DEFAULT_QUESTIONS.map((question) => ({ ...question }))
-        usingDefaultQuestions.value = true
+        useDefaults()
         loaded.value = true
       }
     } finally {
