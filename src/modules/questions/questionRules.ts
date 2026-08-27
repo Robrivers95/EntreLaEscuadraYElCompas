@@ -1,10 +1,13 @@
 import type { AnswerMode, MasonicDegree, Question } from './types'
 
 export const MASONIC_CATEGORIES = [
+  'Historia',
+  'Filosofía',
+  'Geometría',
+  'Ética',
+  'Tradición',
   'Simbolismo',
   'Herramientas',
-  'Filosofía',
-  'Historia',
   'Artes y Ciencias',
   'Ceremonial',
 ] as const
