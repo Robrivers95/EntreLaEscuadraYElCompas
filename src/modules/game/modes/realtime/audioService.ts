@@ -1,4 +1,5 @@
-import AgoraRTC, { IAgoraRTCClient } from 'agora-rtc-sdk-ng'
+import AgoraRTC from 'agora-rtc-sdk-ng'
+import type { IAgoraRTCClient, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng'
 
 export interface AudioControlState {
   isMuted: boolean
@@ -8,18 +9,27 @@ export interface AudioControlState {
 
 export class AudioService {
   private client: IAgoraRTCClient | null = null
+  private localAudioTrack: IMicrophoneAudioTrack | null = null
   private appId = import.meta.env.VITE_AGORA_APP_ID
   private token: string | null = null
   private channelName: string | null = null
 
+  isConfigured(): boolean {
+    return Boolean(this.appId)
+  }
+
   async initialize(channelName: string, token?: string): Promise<void> {
+    if (!this.appId) throw new Error('Falta VITE_AGORA_APP_ID para habilitar la voz.')
+    if (this.client) await this.leave()
+
     this.client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
     this.channelName = channelName
     this.token = token || null
 
     this.client.on('user-published', async (user, mediaType) => {
-      await this.client!.subscribe(user, mediaType)
-      console.log('subscribe success')
+      if (!this.client) return
+      await this.client.subscribe(user, mediaType)
+      if (mediaType === 'audio') user.audioTrack?.play()
     })
 
     this.client.on('user-unpublished', (user) => {
@@ -28,43 +38,35 @@ export class AudioService {
   }
 
   async join(uid: string | number): Promise<void> {
-    if (!this.client || !this.channelName) {
-      throw new Error('AudioService not initialized')
-    }
-
+    if (!this.client || !this.channelName) throw new Error('AudioService not initialized')
+    if (!this.appId) throw new Error('Falta VITE_AGORA_APP_ID para habilitar la voz.')
     await this.client.join(this.appId, this.channelName, this.token, uid)
   }
 
   async publishAudio(): Promise<void> {
-    if (!this.client) {
-      throw new Error('AudioService not initialized')
-    }
-
-    const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
-    await this.client.publish([audioTrack])
+    if (!this.client) throw new Error('AudioService not initialized')
+    if (this.localAudioTrack) return
+    this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack()
+    await this.client.publish([this.localAudioTrack])
   }
 
   async toggleAudio(enabled: boolean): Promise<void> {
-    if (!this.client) {
-      throw new Error('AudioService not initialized')
-    }
-
-    const audioTracks = this.client.localTracks.filter((track) => track.trackMediaType === 'audio')
-    audioTracks.forEach((track) => {
-      track.enabled = enabled
-    })
+    if (!this.localAudioTrack) throw new Error('Microphone audio is not published')
+    await this.localAudioTrack.setEnabled(enabled)
   }
 
   async leave(): Promise<void> {
-    if (!this.client) {
-      throw new Error('AudioService not initialized')
+    this.localAudioTrack?.close()
+    this.localAudioTrack = null
+
+    if (this.client) {
+      await this.client.leave()
+      this.client.removeAllListeners()
     }
 
-    this.client.localTracks.forEach((track) => {
-      track.close()
-    })
-
-    await this.client.leave()
+    this.client = null
+    this.channelName = null
+    this.token = null
   }
 
   getClient(): IAgoraRTCClient | null {
