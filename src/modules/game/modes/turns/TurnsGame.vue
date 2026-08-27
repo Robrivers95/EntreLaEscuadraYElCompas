@@ -1,269 +1,194 @@
 <template>
-  <div class="turns-game">
-    <header class="game-header">
-      <div class="title-cluster">
-        <MasonicSeal :size="82" compact />
-        <div>
-          <span class="masonic-kicker">Cámara de juego</span>
-          <h1>Preguntas y Respuestas</h1>
-          <p class="subtitle">Cada casilla abre una materia; Registro Logia determina tu límite de grado.</p>
-          <div class="header-symbols" aria-hidden="true"><span>☉</span><span>△</span><strong>G</strong><span>□</span><span>☽</span></div>
-        </div>
-      </div>
-
-      <div class="game-info">
-        <div class="player-info temple-panel">
-          <span>Turno</span>
-          <h3>{{ players[currentPlayerIndex]?.name || 'Jugador' }}</h3>
-          <p>{{ players[currentPlayerIndex]?.score || 0 }} puntos</p>
-        </div>
-        <div class="verified-profile temple-panel">
-          <span>Perfil masónico validado</span>
-          <strong>{{ degreeLabel }}</strong>
-          <small>Registro Logia · {{ riteLabel }}</small>
-        </div>
-      </div>
+  <main class="turns-game">
+    <header class="game-header" v-if="room">
+      <button class="back" @click="leave">← Lobby</button>
+      <div class="room-title"><span>{{ riteLabel }}</span><h1>{{ room.name }}</h1><p>{{ room.boardSize }} casillas · {{ levelLabel }} · {{ room.players.length }}/{{ room.maxPlayers }} jugadores</p></div>
+      <div class="turn-box"><small>{{ room.status === 'waiting' ? 'Sala de espera' : room.status === 'finished' ? 'Partida terminada' : 'Turno actual' }}</small><strong>{{ currentPlayer?.name || '—' }}</strong></div>
     </header>
 
-    <div class="mosaic-strip top-strip"></div>
+    <section v-if="!room" class="state-panel"><h2>Cargando sala…</h2></section>
 
-    <div v-if="!authStore.canPlay" class="access-warning">
-      Este perfil no tiene un grado masónico activo validado en Registro Logia. No se mostrarán preguntas hasta corregir el perfil.
-    </div>
-    <div v-if="lastTurnMessage" class="turn-message">✦ {{ lastTurnMessage }}</div>
-
-    <div class="game-content">
-      <div class="board-section temple-panel">
-        <div class="board-caption">
-          <span>Tablero de la Logia</span>
-          <div class="board-ornaments" aria-hidden="true">B · ✦ · △ · G · □ · ✦ · J</div>
-        </div>
-        <GameBoard
-          v-if="players.length > 0"
-          :players="players"
-          :board-size="boardSize"
-          :categories="selectedCategories"
-          @cell-click="cellClicked"
-        />
+    <section v-else-if="room.status === 'waiting'" class="waiting-panel">
+      <div class="seal-line">△ □ <b>G</b> ○</div>
+      <h2>Esperando jugadores</h2>
+      <p>La sala es visible en el lobby general. No importa qué rito tenga configurado cada usuario fuera de esta mesa.</p>
+      <div class="players-waiting">
+        <div v-for="player in room.players" :key="player.uid" class="waiting-player"><span class="avatar">{{ initials(player.name) }}</span><div><strong>{{ player.name }}</strong><small>{{ player.degree ? DEGREE_LABELS[player.degree] : 'Acceso por sala' }}</small></div><em v-if="player.uid === room.hostUid">Anfitrión</em></div>
       </div>
-
-      <div v-if="currentQuestion" class="question-section">
-        <QuestionCard :question="currentQuestion" @resolved="handleResolution" @skip="handleSkip" />
-      </div>
-
-      <div v-else class="action-section temple-panel">
-        <div class="action-emblem"><MasonicSeal :size="112" tone="muted" /></div>
-        <div class="rite-chip">{{ riteLabel }}</div>
-        <div class="current-category" v-if="currentCellCategory">
-          Última casilla: <strong>{{ currentCellCategory }}</strong>
-        </div>
-        <p>{{ questionsStore.loading ? 'Preparando banco de preguntas…' : 'Lanza el dado para avanzar en el tablero' }}</p>
-        <div class="dice-frame">
-          <div class="dice" :class="{ rolling: diceRolling }">{{ diceFace }}</div>
-        </div>
-        <button
-          :disabled="questionsStore.loading || diceRolling || !authStore.canPlay"
-          @click="rollDice"
-          class="btn-roll"
-        >Lanzar dado</button>
-        <p class="grade-note">
-          Acceso máximo: <strong>{{ degreeLabel }}</strong>. Nunca se presentan preguntas de un grado superior al registrado.
-        </p>
-        <p v-if="questionsStore.usingDefaultQuestions" class="fallback-note">
-          ✦ Usando el banco incluido en la aplicación. Puedes sincronizarlo con Firebase desde Administración.
-        </p>
-      </div>
-    </div>
-
-    <section class="scores-section temple-panel">
-      <div class="scores-heading">
-        <div>
-          <span class="masonic-kicker">Cuadro de puntuación</span>
-          <h3>Marcador de la mesa</h3>
-        </div>
-        <span class="score-symbol" aria-hidden="true">⚒</span>
-      </div>
-      <div class="scores-list">
-        <div v-for="(player, index) in players" :key="player.id" class="score-item" :class="{ active: index === currentPlayerIndex }">
-          <span class="player-name">{{ player.name }}</span>
-          <span class="player-score">{{ player.score }} pts</span>
-        </div>
-      </div>
-      <div class="scoring-legend">
-        <span>Con incisos: Aprendiz 10 · Compañero 20 · Maestro 30</span>
-        <span>Sin incisos: <strong>doble puntaje</strong></span>
+      <div class="waiting-actions">
+        <button v-if="isHost" class="primary" :disabled="room.players.length < 2" @click="startGame">{{ room.players.length < 2 ? 'Falta otro jugador' : 'Iniciar partida' }}</button>
+        <span v-else>El anfitrión iniciará la partida.</span>
       </div>
     </section>
-  </div>
+
+    <section v-else-if="room.status === 'finished'" class="finished-panel">
+      <div class="trophy">🏆</div><span class="kicker">Ganador</span><h2>{{ winner?.name || 'Partida finalizada' }}</h2>
+      <div class="final-scores"><div v-for="player in sortedByScore" :key="player.uid"><strong>{{ player.name }}</strong><span>{{ player.score }} pts</span></div></div>
+      <button class="primary" @click="leave">Volver al lobby</button>
+    </section>
+
+    <template v-else>
+      <div v-if="turnMessage" class="turn-message">{{ turnMessage }}</div>
+      <section class="game-grid">
+        <div class="board-column">
+          <GameBoard :players="boardPlayers" :board-size="room.boardSize" :categories="categories" />
+          <div class="room-legend"><span>{{ room.rite === 'libre' ? '⚠ MODO NO MASÓN' : riteLabel }}</span><span>Meta: casilla {{ room.boardSize }}</span></div>
+        </div>
+
+        <div class="action-column">
+          <QuestionCard v-if="currentQuestion && isMyTurn" :question="currentQuestion" @resolved="handleResolution" @skip="handleSkip" />
+
+          <div v-else-if="currentQuestion" class="spectator-question">
+            <span class="kicker">Responde {{ currentPlayer?.name }}</span><h2>{{ currentQuestion.text }}</h2>
+            <div v-for="(option, optionIndex) in currentQuestion.options" :key="option" class="readonly-option"><b>{{ String.fromCharCode(65 + optionIndex) }}</b>{{ option }}</div>
+            <p>Estás viendo la misma pregunta. Sólo el jugador en turno puede registrar la respuesta.</p>
+          </div>
+
+          <div v-else class="dice-panel" :class="{ mine: isMyTurn }">
+            <span class="kicker">{{ isMyTurn ? 'Tu turno' : `Turno de ${currentPlayer?.name}` }}</span>
+            <div class="dice" :class="{ rolling: diceRolling }">{{ diceFace }}</div>
+            <p v-if="room.currentCategory">Última categoría: <strong>{{ room.currentCategory }}</strong></p>
+            <button class="primary roll" :disabled="!isMyTurn || diceRolling" @click="rollDice">🎲 Lanzar dado</button>
+            <small v-if="!isMyTurn">El tablero se actualizará automáticamente.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="score-strip">
+        <article v-for="(player, index) in room.players" :key="player.uid" :class="{ active: index === room.currentPlayerIndex }"><span class="avatar small-avatar">{{ initials(player.name) }}</span><div><strong>{{ player.name }}</strong><small>Casilla {{ player.position + 1 }}</small></div><b>{{ player.score }} pts</b></article>
+      </section>
+    </template>
+  </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import GameBoard from '@/modules/game/board/GameBoard.vue'
 import QuestionCard from './QuestionCard.vue'
-import MasonicSeal from '@/shared/MasonicSeal.vue'
-import { useQuestionsStore } from '@/stores/questionsStore'
 import { useAuthStore } from '@/stores/authStore'
-import { useGameStore } from '@/stores/gameStore'
-import { DEGREE_LABELS, getQuestionPoints, MASONIC_CATEGORIES, RITE_LABELS } from '@/modules/questions/questionRules'
-import type { Player, BoardCell } from '@/modules/game/types'
+import { useQuestionsStore } from '@/stores/questionsStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { roomService } from '@/modules/game/lobby/roomService'
+import { DEGREE_LABELS, GENERAL_CATEGORIES, MASONIC_CATEGORIES, RITE_LABELS, getQuestionPoints } from '@/modules/questions/questionRules'
 import type { AnswerMode, Question } from '@/modules/questions/types'
+import type { Player } from '@/modules/game/types'
 
-const questionsStore = useQuestionsStore()
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
-const gameStore = useGameStore()
-
-const currentPlayerIndex = ref(0)
-const currentQuestion = ref<Question | null>(null)
-const selectedCategories = ref<string[]>([...MASONIC_CATEGORIES])
-const boardSize = ref(30)
-const currentCellCategory = ref('')
-const lastTurnMessage = ref('')
-const diceResult = ref<number | null>(null)
+const questionsStore = useQuestionsStore()
+const roomStore = useRoomStore()
+const roomId = computed(() => route.query.room as string | undefined)
+const room = computed(() => roomStore.currentRoom)
 const diceRolling = ref(false)
+const diceResult = ref<number | null>(null)
+const turnMessage = ref('')
 const recentQuestionIds = ref<string[]>([])
 
-const players = ref<Player[]>([
-  { id: '1', name: 'Jugador 1', position: 0, score: 0, color: '#D1B15C', avatar: 'P1' },
-  { id: '2', name: 'Jugador 2', position: 0, score: 0, color: '#7395B8', avatar: 'P2' },
-])
-
-const degreeLabel = computed(() => authStore.masonicDegree ? DEGREE_LABELS[authStore.masonicDegree] : 'Sin grado')
-const riteLabel = computed(() => RITE_LABELS[gameStore.selectedRite])
-const diceFaces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
-const diceFace = computed(() => diceResult.value ? diceFaces[diceResult.value - 1] : '⚄')
+const colors = ['#c94f4f','#4f8cc9','#55a56b','#bd8f37','#8e66c2','#4ea5a5','#c56a9c','#8c9a4c']
+const categories = computed<string[]>(() => room.value?.rite === 'libre' ? [...GENERAL_CATEGORIES] : [...MASONIC_CATEGORIES])
+const riteLabel = computed(() => room.value ? RITE_LABELS[room.value.rite] : '')
+const levelLabel = computed(() => room.value?.level === 'general' ? 'General' : room.value?.level ? DEGREE_LABELS[room.value.level] : '')
+const currentPlayer = computed(() => room.value?.players[room.value.currentPlayerIndex] ?? null)
+const isMyTurn = computed(() => currentPlayer.value?.uid === authStore.currentUser?.uid)
+const isHost = computed(() => room.value?.hostUid === authStore.currentUser?.uid)
+const winner = computed(() => room.value?.players.find((player) => player.uid === room.value?.winnerUid))
+const sortedByScore = computed(() => [...(room.value?.players ?? [])].sort((a,b) => b.score-a.score))
+const currentQuestion = computed<Question | null>(() => {
+  const id = room.value?.currentQuestionId
+  return id ? questionsStore.questions.find((question) => question.id === id) ?? null : null
+})
+const boardPlayers = computed<Player[]>(() => (room.value?.players ?? []).map((player, index) => ({ id: player.uid, name: player.name, position: player.position, score: player.score, color: colors[index % colors.length], avatar: initials(player.name), degree: player.degree ?? undefined })))
+const diceFaces = ['⚀','⚁','⚂','⚃','⚄','⚅']
+const diceFace = computed(() => diceResult.value ? diceFaces[diceResult.value-1] : room.value?.lastDice ? diceFaces[room.value.lastDice-1] : '⚄')
 
 onMounted(async () => {
-  if (authStore.currentUser && !authStore.profile) await authStore.refreshProfile()
-  if (authStore.profile?.name) players.value[0].name = authStore.profile.name
+  if (!roomId.value) { router.replace('/lobby'); return }
   await questionsStore.loadQuestions({ fallbackToDefaults: true })
+  roomStore.watchRoom(roomId.value)
 })
+onBeforeUnmount(() => roomStore.stop())
+
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0,2).map((part) => part[0]?.toUpperCase()).join('') || 'J'
+
+const startGame = async () => {
+  if (!room.value || !isHost.value) return
+  const resetPlayers = room.value.players.map((player) => ({ ...player, position: 0, score: 0 }))
+  await roomService.patchRoom(room.value.id, { status:'playing', players:resetPlayers, currentPlayerIndex:0, currentQuestionId:null, currentCategory:null, lastDice:null, winnerUid:null })
+}
 
 const rollDice = () => {
-  if (!authStore.canPlay || !authStore.masonicDegree) return
-  lastTurnMessage.value = ''
+  if (!room.value || !isMyTurn.value || diceRolling.value) return
   diceRolling.value = true
-
   let ticks = 0
   const timer = window.setInterval(() => {
-    diceResult.value = Math.floor(Math.random() * 6) + 1
+    diceResult.value = Math.floor(Math.random()*6)+1
     ticks += 1
-    if (ticks >= 7) {
+    if (ticks >= 8) {
       window.clearInterval(timer)
       diceRolling.value = false
-      movePlayer(diceResult.value || 1)
+      void moveAndAsk(diceResult.value || 1)
     }
-  }, 75)
+  },70)
 }
 
-const movePlayer = (steps: number) => {
-  const player = players.value[currentPlayerIndex.value]
-  player.position = (player.position + steps) % boardSize.value
-  loadQuestionForCell(player.position)
-}
-
-const getCategoryForPosition = (position: number): string =>
-  selectedCategories.value[position % selectedCategories.value.length]
-
-const loadQuestionForCell = (position: number) => {
-  const degree = authStore.masonicDegree
-  if (!degree) {
-    lastTurnMessage.value = 'Registro Logia no tiene un grado válido para este usuario.'
+const moveAndAsk = async (steps: number) => {
+  if (!room.value || !currentPlayer.value) return
+  const playerIndex = room.value.currentPlayerIndex
+  const players = room.value.players.map((player) => ({ ...player }))
+  const player = players[playerIndex]
+  player.position = Math.min(player.position + steps, room.value.boardSize - 1)
+  const category = categories.value[player.position % categories.value.length]
+  let eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level, category)
+  if (!eligible.length) eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level)
+  if (!eligible.length) {
+    turnMessage.value = 'Esta sala no tiene preguntas compatibles todavía.'
+    await advanceTurn(players)
     return
   }
-
-  const category = getCategoryForPosition(position)
-  currentCellCategory.value = category
-  const eligible = questionsStore.getEligibleQuestions(category, degree, gameStore.selectedRite)
-
-  if (eligible.length === 0) {
-    lastTurnMessage.value = `No hay preguntas de ${category} para ${riteLabel.value} compatibles con tu grado.`
-    window.setTimeout(nextTurn, 700)
-    return
-  }
-
-  const notRecentlyUsed = eligible.filter((question) => !recentQuestionIds.value.includes(question.id))
-  const pool = notRecentlyUsed.length ? notRecentlyUsed : eligible
-  const question = pool[Math.floor(Math.random() * pool.length)]
-  currentQuestion.value = question
+  const fresh = eligible.filter((question) => !recentQuestionIds.value.includes(question.id))
+  const pool = fresh.length ? fresh : eligible
+  const question = pool[Math.floor(Math.random()*pool.length)]
   recentQuestionIds.value.push(question.id)
-  if (recentQuestionIds.value.length > 12) recentQuestionIds.value.shift()
+  if (recentQuestionIds.value.length > 16) recentQuestionIds.value.shift()
+  await roomService.patchRoom(room.value.id, { players, currentQuestionId:question.id, currentCategory:category, lastDice:steps })
 }
 
-const cellClicked = (cell: BoardCell) => { currentCellCategory.value = cell.category }
-
-const handleResolution = (resolution: { correct: boolean; mode: AnswerMode }) => {
-  if (!currentQuestion.value) return
-  if (resolution.correct) {
-    const points = getQuestionPoints(currentQuestion.value, resolution.mode)
-    players.value[currentPlayerIndex.value].score += points
-    lastTurnMessage.value = resolution.mode === 'direct'
-      ? `¡Respuesta sin incisos! +${points} puntos.`
-      : `Respuesta correcta. +${points} puntos.`
-  } else {
-    lastTurnMessage.value = 'Respuesta incorrecta. No suma puntos.'
+const handleResolution = async (resolution: { correct:boolean; mode:AnswerMode }) => {
+  if (!room.value || !currentQuestion.value || !isMyTurn.value) return
+  const players = room.value.players.map((player) => ({ ...player }))
+  const player = players[room.value.currentPlayerIndex]
+  const points = resolution.correct ? getQuestionPoints(currentQuestion.value, resolution.mode) : 0
+  player.score += points
+  turnMessage.value = resolution.correct ? `${player.name}: +${points} puntos.` : `${player.name}: respuesta incorrecta.`
+  if (player.position >= room.value.boardSize - 1) {
+    await roomService.patchRoom(room.value.id, { players, status:'finished', winnerUid:player.uid, currentQuestionId:null })
+    return
   }
-  nextTurn()
+  await advanceTurn(players)
 }
 
-const handleSkip = () => { lastTurnMessage.value = 'Pregunta saltada.'; nextTurn() }
-const nextTurn = () => {
-  currentQuestion.value = null
-  currentPlayerIndex.value = (currentPlayerIndex.value + 1) % players.value.length
+const handleSkip = async () => {
+  if (!room.value || !isMyTurn.value) return
+  turnMessage.value = 'Pregunta saltada.'
+  await advanceTurn(room.value.players.map((player) => ({ ...player })))
+}
+
+const advanceTurn = async (players: typeof room.value.players) => {
+  if (!room.value) return
+  const nextIndex = (room.value.currentPlayerIndex + 1) % players.length
+  await roomService.patchRoom(room.value.id, { players, currentPlayerIndex:nextIndex, currentQuestionId:null })
+}
+
+const leave = async () => {
+  if (room.value && authStore.currentUser) {
+    try { await roomStore.leaveRoom(room.value.id, authStore.currentUser.uid) } catch (error) { console.warn(error) }
+  }
+  router.push('/lobby')
 }
 </script>
 
 <style scoped>
-.turns-game { min-height: 100vh; padding: 22px 20px 44px; background: radial-gradient(circle at 50% 0, rgba(213,183,97,.08), transparent 28rem); }
-.game-header { max-width: 1280px; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
-.title-cluster { display: flex; align-items: center; gap: 16px; }
-.game-header h1 { color: #dcc16f; font-size: 30px; margin: 2px 0 0; text-transform: uppercase; letter-spacing: .085em; }
-.subtitle { margin: 4px 0 0; color: var(--masonic-muted); }
-.header-symbols { display: flex; gap: 13px; align-items: center; margin-top: 7px; color: rgba(213,183,97,.55); font-size: 12px; }
-.header-symbols strong { color: #e6d184; font-size: 16px; }
-.game-info { min-width: 440px; display: grid; grid-template-columns: 1fr 1.25fr; gap: 10px; }
-.player-info, .verified-profile { border-radius: 3px; padding: 12px 14px; }
-.player-info span, .verified-profile span { color: rgba(241,231,207,.54); text-transform: uppercase; font-size: 9px; letter-spacing: .14em; }
-.player-info h3 { color: #f0e6ca; margin: 2px 0; font-size: 17px; }
-.player-info p { color: #d5b761; margin: 0; font-weight: 800; }
-.verified-profile { display: flex; flex-direction: column; gap: 4px; }
-.verified-profile strong { color: #e2ca79; font-size: 17px; }
-.verified-profile small { color: rgba(241,231,207,.5); }
-.top-strip { max-width: 1280px; margin: 0 auto 17px; }
-.access-warning, .turn-message { max-width: 1280px; margin: 0 auto 14px; padding: 11px 14px; border-radius: 2px; }
-.access-warning { border-left: 3px solid #944147; background: rgba(111,32,40,.1); color: #dfa9ad; }
-.turn-message { border: 1px solid rgba(213,183,97,.23); border-left: 3px solid #c6a753; background: rgba(213,183,97,.055); color: #e8d9b8; }
-.game-content { display: grid; grid-template-columns: 1.18fr .82fr; gap: 24px; max-width: 1280px; margin: 0 auto; align-items: stretch; }
-.board-section { min-width: 0; border-radius: 4px; padding: 16px; }
-.board-caption { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 0 4px 12px; border-bottom: 1px solid rgba(213,183,97,.15); margin-bottom: 12px; color: #d6bd70; text-transform: uppercase; letter-spacing: .13em; font-size: 10px; font-weight: 800; }
-.board-ornaments { color: rgba(213,183,97,.48); letter-spacing: .16em; }
-.question-section, .action-section { display: flex; flex-direction: column; justify-content: center; }
-.action-section { overflow: hidden; border-radius: 4px; padding: 26px; text-align: center; min-height: 460px; align-items: center; }
-.action-section::before { top: 12px; left: 12px; }
-.action-emblem { margin-bottom: -12px; opacity: .55; }
-.action-section p { color: #ede2c9; }
-.rite-chip { max-width: 90%; border: 1px solid #785b24; background: rgba(213,183,97,.07); color: #e0c873; padding: 6px 11px; border-radius: 999px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
-.current-category { color: rgba(241,231,207,.57); font-size: 12px; margin-top: 12px; }
-.current-category strong, .grade-note strong { color: #d5b761; }
-.dice-frame { width: 124px; height: 124px; margin: 15px 0; display: grid; place-items: center; border: 1px solid rgba(213,183,97,.35); background: radial-gradient(circle, rgba(213,183,97,.09), transparent 67%); transform: rotate(45deg); }
-.dice { font-size: 88px; line-height: 1; color: #e4ca75; filter: drop-shadow(0 10px 12px rgba(0,0,0,.42)); transform: rotate(-45deg); transform-style: preserve-3d; }
-.dice.rolling { animation: diceRoll .3s linear infinite; }
-@keyframes diceRoll { 0% { transform: rotate(-45deg) rotateY(0) scale(1); } 50% { transform: rotate(-33deg) rotateY(90deg) scale(1.08); } 100% { transform: rotate(-45deg) rotateY(180deg) scale(1); } }
-.btn-roll { min-width: 190px; padding: 13px 30px; background: linear-gradient(135deg,#e2ca78,#8b6826); border: 1px solid #f0d98a; border-radius: 3px; color: #080b10; font-weight: 900; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; cursor: pointer; box-shadow: 0 7px 24px rgba(0,0,0,.25); }
-.btn-roll:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 11px 30px rgba(213,183,97,.17); }
-.btn-roll:disabled { opacity: .4; cursor: not-allowed; }
-.grade-note, .fallback-note { color: rgba(241,231,207,.5) !important; font-size: 10px; line-height: 1.45; max-width: 420px; }
-.scores-section { max-width: 1280px; margin: 24px auto 0; border-radius: 4px; padding: 17px; }
-.scores-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
-.scores-section h3 { color: #d7bd6d; margin: 2px 0 0; text-transform: uppercase; letter-spacing: .08em; }
-.score-symbol { color: rgba(213,183,97,.55); font-size: 26px; }
-.scores-list { display: flex; gap: 12px; flex-wrap: wrap; }
-.score-item { flex: 1; min-width: 150px; background: rgba(213,183,97,.045); border: 1px solid rgba(213,183,97,.22); border-radius: 2px; padding: 12px; display: flex; justify-content: space-between; }
-.score-item.active { transform: translateY(-2px); background: rgba(213,183,97,.11); border-color: #b69743; box-shadow: inset 0 0 18px rgba(213,183,97,.035); }
-.player-name { color: #f0e6c8; font-weight: 700; }
-.player-score { color: #d5b761; font-weight: 900; }
-.scoring-legend { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: rgba(241,231,207,.5); font-size: 10px; }
-.scoring-legend strong { color: #d5b761; }
-@media (max-width: 980px) { .game-header { flex-direction: column; align-items: flex-start; } .game-info { min-width: 0; width: 100%; } .game-content { grid-template-columns: 1fr; } .action-section { min-height: 390px; } }
-@media (max-width: 600px) { .turns-game { padding: 15px 11px 35px; } .title-cluster { align-items: flex-start; } .title-cluster > :first-child { display: none; } .game-header h1 { font-size: 24px; } .game-info { grid-template-columns: 1fr; } .board-caption { align-items: flex-start; flex-direction: column; } .scoring-legend { flex-direction: column; } }
+.turns-game{min-height:100vh;padding:18px 18px 55px;background:radial-gradient(circle at 50% -10%,rgba(37,75,117,.34),transparent 38%),#050a11;color:#eee0c2}.game-header{max-width:1240px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding-bottom:15px;border-bottom:1px solid rgba(214,183,95,.23)}.back{border:1px solid rgba(214,183,95,.3);background:transparent;color:#d9c17a;padding:9px;border-radius:7px}.room-title span,.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:#c6a44d}.room-title h1{margin:1px 0;color:#f0d992;font:700 30px Georgia}.room-title p{margin:0;color:rgba(238,224,194,.5)}.turn-box{display:flex;flex-direction:column;text-align:right}.turn-box strong{color:#efdba7}.state-panel,.waiting-panel,.finished-panel{max-width:760px;margin:50px auto;text-align:center;padding:35px;border:1px solid rgba(214,183,95,.25);border-radius:14px;background:rgba(8,22,36,.82)}.seal-line{font:700 28px Georgia;color:#c7aa57}.waiting-panel h2,.finished-panel h2{color:#efdb9a;font-family:Georgia,serif}.waiting-panel>p{color:rgba(238,224,194,.57)}.players-waiting{display:grid;gap:8px;margin:20px 0}.waiting-player{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid rgba(214,183,95,.15);border-radius:8px;text-align:left}.waiting-player div{display:flex;flex:1;flex-direction:column}.waiting-player em{font-size:10px;color:#d2b863}.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c9a84c,#604817);color:#08111b;font-weight:900}.waiting-actions{display:flex;justify-content:center}.primary{border:0;border-radius:8px;padding:11px 15px;background:linear-gradient(135deg,#e1c36c,#8b6914);color:#07101a;font-weight:900}.primary:disabled{opacity:.35}.trophy{font-size:52px}.final-scores{display:grid;gap:7px;margin:20px}.final-scores div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid rgba(214,183,95,.12)}.turn-message{max-width:1240px;margin:13px auto;padding:9px 12px;border-left:3px solid #b88d30;background:rgba(184,141,48,.07);color:#e1cb8c}.game-grid{max-width:1240px;margin:18px auto;display:grid;grid-template-columns:1.12fr .88fr;gap:20px;align-items:center}.board-column{min-width:0}.room-legend{display:flex;justify-content:space-between;margin-top:8px;color:rgba(238,224,194,.42);font-size:10px}.action-column{min-height:400px;display:grid;place-items:center}.dice-panel,.spectator-question{width:100%;max-width:520px;padding:25px;border:1px solid rgba(214,183,95,.27);border-radius:14px;background:rgba(8,22,36,.82);text-align:center}.dice-panel.mine{border-color:#c9a84c}.dice{font-size:92px;color:#e3ca78;margin:15px;filter:drop-shadow(0 10px 14px #000)}.dice.rolling{animation:roll .28s linear infinite}@keyframes roll{50%{transform:rotate(18deg) scale(1.1)}100%{transform:rotate(-15deg)}}.roll{min-width:190px}.dice-panel p{color:rgba(238,224,194,.55)}.dice-panel p strong{color:#e3c976}.dice-panel small{display:block;margin-top:10px;color:rgba(238,224,194,.38);text-transform:none}.spectator-question{text-align:left}.spectator-question h2{color:#f0e1bd;line-height:1.4}.readonly-option{display:grid;grid-template-columns:32px 1fr;gap:8px;padding:9px;margin:6px 0;border:1px solid rgba(214,183,95,.16);border-radius:7px;color:rgba(238,224,194,.74)}.readonly-option b{color:#e0c36d}.spectator-question p{font-size:11px;color:rgba(238,224,194,.42)}.score-strip{max-width:1240px;margin:auto;display:flex;gap:8px;flex-wrap:wrap}.score-strip article{flex:1;min-width:180px;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid rgba(214,183,95,.16);border-radius:9px;background:rgba(7,18,30,.72)}.score-strip article.active{border-color:#c9a84c;background:rgba(201,168,76,.07)}.score-strip article div{display:flex;flex-direction:column}.score-strip article>b{color:#e2c874}.small-avatar{width:30px;height:30px;font-size:10px}@media(max-width:900px){.game-grid{grid-template-columns:1fr}.game-header{grid-template-columns:auto 1fr}.turn-box{grid-column:1/-1;text-align:left}}@media(max-width:540px){.game-header{grid-template-columns:1fr}.room-title{text-align:center}.back{justify-self:start}}
 </style>
