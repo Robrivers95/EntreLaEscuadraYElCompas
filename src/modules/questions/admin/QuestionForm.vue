@@ -1,14 +1,20 @@
 <template>
   <div class="question-form">
-    <h2>{{ isEditing ? 'Editar Pregunta' : 'Nueva Pregunta' }}</h2>
+    <div class="form-title-row">
+      <div>
+        <h2>{{ isEditing ? 'Editar pregunta' : 'Nueva pregunta' }}</h2>
+        <p class="form-help">Cada pregunta queda ligada a una categoría del tablero y a un grado.</p>
+      </div>
+      <span v-if="isEditing" class="editing-badge">Editando</span>
+    </div>
 
     <form @submit.prevent="submitForm" class="form">
       <div class="form-group">
-        <label for="text">Texto de la Pregunta</label>
+        <label for="text">Pregunta</label>
         <textarea
           id="text"
           v-model="formData.text"
-          placeholder="Ingresa la pregunta..."
+          placeholder="Ej. ¿Qué simboliza la escuadra?"
           required
           class="form-input textarea"
         ></textarea>
@@ -16,144 +22,252 @@
 
       <div class="form-row">
         <div class="form-group">
-          <label for="category">Categoría</label>
-          <input
-            id="category"
-            v-model="formData.category"
-            type="text"
-            placeholder="Ej: Historia, Filosofía"
-            required
-            class="form-input"
-          />
+          <label for="category">Categoría de la casilla</label>
+          <select id="category" v-model="formData.category" required class="form-input">
+            <option v-for="category in categories" :key="category" :value="category">
+              {{ category }}
+            </option>
+          </select>
         </div>
 
         <div class="form-group">
-          <label for="difficulty">Dificultad</label>
-          <select v-model="formData.difficulty" id="difficulty" required class="form-input">
-            <option value="aprendiz">Aprendiz (Fácil)</option>
-            <option value="compañero">Compañero (Medio)</option>
-            <option value="maestro">Maestro (Difícil)</option>
+          <label for="difficulty">Grado mínimo de la pregunta</label>
+          <select id="difficulty" v-model="formData.difficulty" required class="form-input">
+            <option value="aprendiz">Aprendiz</option>
+            <option value="compañero">Compañero</option>
+            <option value="maestro">Maestro</option>
           </select>
         </div>
       </div>
 
+      <div class="direct-answer-box">
+        <div class="form-group">
+          <label for="direct-answer">Respuesta corta para “sin incisos”</label>
+          <input
+            id="direct-answer"
+            v-model="formData.directAnswer"
+            type="text"
+            placeholder="Si se deja vacía, se usa la opción correcta"
+            class="form-input"
+          />
+        </div>
+        <div class="form-group">
+          <label for="aliases">Otras respuestas aceptadas</label>
+          <input
+            id="aliases"
+            v-model="formData.acceptedDirectAnswersText"
+            type="text"
+            placeholder="Separadas por coma. Ej. Rectitud, conducta recta"
+            class="form-input"
+          />
+          <small>Sirve para aceptar distintas formas correctas cuando el jugador responde antes de escuchar A–D.</small>
+        </div>
+      </div>
+
       <div class="form-group">
-        <label>Opciones de Respuesta</label>
+        <div class="options-title">
+          <label>Incisos de opción múltiple</label>
+          <span>Marca uno como correcto</span>
+        </div>
         <div v-for="(_option, index) in formData.options" :key="index" class="option-input">
+          <span class="option-letter">{{ String.fromCharCode(65 + index) }}</span>
           <input
             v-model="formData.options[index]"
             type="text"
-            :placeholder="`Opción ${index + 1}`"
+            :placeholder="`Opción ${String.fromCharCode(65 + index)}`"
             required
             class="form-input"
           />
-          <label class="correct-answer-label">
+          <label class="correct-answer-label" :class="{ selected: formData.correctAnswer === index }">
             <input
               type="radio"
-              :name="'correct-answer'"
+              name="correct-answer"
               :value="index"
               v-model.number="formData.correctAnswer"
             />
-            Respuesta Correcta
+            Correcta
           </label>
         </div>
       </div>
 
+      <div class="form-group">
+        <label for="explanation">Explicación opcional</label>
+        <textarea
+          id="explanation"
+          v-model="formData.explanation"
+          placeholder="Breve explicación para mostrar después de responder"
+          class="form-input explanation"
+        ></textarea>
+      </div>
+
+      <div class="points-preview">
+        <span>Con incisos: <strong>{{ normalPoints }} pts</strong></span>
+        <span>Sin incisos: <strong>{{ directPoints }} pts</strong></span>
+      </div>
+
       <div class="form-actions">
         <button type="submit" class="btn-submit">
-          {{ isEditing ? 'Actualizar' : 'Guardar' }} Pregunta
+          {{ isEditing ? 'Guardar cambios' : 'Agregar pregunta' }}
         </button>
-        <button type="button" @click="$emit('cancel')" class="btn-cancel">Cancelar</button>
+        <button v-if="isEditing" type="button" @click="cancelEdit" class="btn-cancel">Cancelar edición</button>
+        <button v-else type="button" @click="resetForm" class="btn-cancel">Limpiar</button>
       </div>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import type { Question } from '@/modules/questions/types'
+import { computed, ref, watch } from 'vue'
+import { getBasePoints, MASONIC_CATEGORIES } from '@/modules/questions/questionRules'
+import type { MasonicDegree, Question } from '@/modules/questions/types'
+
+type QuestionInput = Omit<Question, 'id' | 'createdAt' | 'updatedAt'>
 
 interface Props {
   editingQuestion?: Question | null
 }
 
 interface Emits {
-  (e: 'submit', question: Omit<Question, 'id' | 'createdAt'>): void
+  (e: 'submit', question: QuestionInput): void
   (e: 'cancel'): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const categories = MASONIC_CATEGORIES
 
-const isEditing = ref(!!props.editingQuestion)
+interface FormData {
+  text: string
+  category: string
+  difficulty: MasonicDegree
+  options: string[]
+  correctAnswer: number
+  directAnswer: string
+  acceptedDirectAnswersText: string
+  explanation: string
+}
 
-const formData = ref({
+const createEmptyForm = (): FormData => ({
   text: '',
-  category: '',
-  difficulty: 'aprendiz' as 'aprendiz' | 'compañero' | 'maestro',
+  category: MASONIC_CATEGORIES[0],
+  difficulty: 'aprendiz',
   options: ['', '', '', ''],
   correctAnswer: 0,
+  directAnswer: '',
+  acceptedDirectAnswersText: '',
+  explanation: '',
 })
 
-watch(() => props.editingQuestion, (newQuestion) => {
-  if (newQuestion) {
-    formData.value = { ...newQuestion }
-    isEditing.value = true
-  } else {
-    resetForm()
-    isEditing.value = false
-  }
-})
+const formData = ref<FormData>(createEmptyForm())
+const isEditing = computed(() => Boolean(props.editingQuestion))
+const normalPoints = computed(() => getBasePoints(formData.value.difficulty))
+const directPoints = computed(() => normalPoints.value * 2)
+
+watch(
+  () => props.editingQuestion,
+  (question) => {
+    if (!question) {
+      formData.value = createEmptyForm()
+      return
+    }
+
+    formData.value = {
+      text: question.text,
+      category: question.category,
+      difficulty: question.difficulty,
+      options: [...question.options],
+      correctAnswer: question.correctAnswer,
+      directAnswer: question.directAnswer ?? '',
+      acceptedDirectAnswersText: (question.acceptedDirectAnswers ?? []).join(', '),
+      explanation: question.explanation ?? '',
+    }
+  },
+  { immediate: true },
+)
 
 const resetForm = () => {
-  formData.value = {
-    text: '',
-    category: '',
-    difficulty: 'aprendiz',
-    options: ['', '', '', ''],
-    correctAnswer: 0,
-  }
+  formData.value = createEmptyForm()
+}
+
+const cancelEdit = () => {
+  resetForm()
+  emit('cancel')
 }
 
 const submitForm = () => {
-  if (formData.value.options.some((opt) => !opt)) {
-    alert('Todas las opciones deben estar completas')
+  const options = formData.value.options.map((option) => option.trim())
+  if (options.some((option) => !option)) {
+    alert('Completa los cuatro incisos antes de guardar.')
     return
   }
 
+  const acceptedDirectAnswers = formData.value.acceptedDirectAnswersText
+    .split(',')
+    .map((answer) => answer.trim())
+    .filter(Boolean)
+
   emit('submit', {
-    text: formData.value.text,
+    text: formData.value.text.trim(),
     category: formData.value.category,
     difficulty: formData.value.difficulty,
-    options: formData.value.options,
+    options,
     correctAnswer: formData.value.correctAnswer,
+    directAnswer: formData.value.directAnswer.trim() || options[formData.value.correctAnswer],
+    acceptedDirectAnswers,
+    explanation: formData.value.explanation.trim() || undefined,
   })
 
-  resetForm()
+  if (!isEditing.value) resetForm()
 }
 </script>
 
 <style scoped>
 .question-form {
-  background: rgba(201, 168, 76, 0.05);
+  background: linear-gradient(145deg, rgba(201, 168, 76, 0.08), rgba(26, 10, 0, 0.9));
   border: 1px solid #c9a84c;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.25);
+}
+
+.form-title-row,
+.options-title,
+.points-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .question-form h2 {
   color: #c9a84c;
-  margin-top: 0;
-  margin-bottom: 20px;
+  margin: 0;
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+
+.form-help,
+.options-title span,
+.form-group small {
+  color: rgba(240, 230, 200, 0.65);
+  font-size: 12px;
+}
+
+.editing-badge {
+  background: #c9a84c;
+  color: #1a0a00;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 18px;
+  margin-top: 22px;
 }
 
 .form-row {
@@ -165,102 +279,120 @@ const submitForm = () => {
 .form-group {
   display: flex;
   flex-direction: column;
+  gap: 7px;
 }
 
 .form-group label {
   color: #f0e6c8;
-  margin-bottom: 8px;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 14px;
 }
 
 .form-input {
-  padding: 10px 12px;
-  background: rgba(201, 168, 76, 0.1);
+  padding: 11px 12px;
+  background: rgba(201, 168, 76, 0.08);
   border: 1px solid #8b6914;
-  border-radius: 5px;
+  border-radius: 7px;
   color: #f0e6c8;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  font-family: inherit;
+  font: inherit;
 }
 
 .form-input:focus {
   outline: none;
-  background: rgba(201, 168, 76, 0.2);
   border-color: #c9a84c;
-  box-shadow: 0 0 5px rgba(201, 168, 76, 0.3);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.12);
 }
 
-.textarea {
-  resize: vertical;
-  min-height: 100px;
+.textarea { min-height: 95px; resize: vertical; }
+.explanation { min-height: 70px; resize: vertical; }
+
+.direct-answer-box {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px dashed rgba(201, 168, 76, 0.6);
+  border-radius: 10px;
+  background: rgba(201, 168, 76, 0.04);
 }
 
 .option-input {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-top: 9px;
 }
 
-.option-input .form-input {
-  flex: 1;
+.option-letter {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(201, 168, 76, 0.16);
+  color: #c9a84c;
+  font-weight: 800;
 }
 
 .correct-answer-label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: #f0e6c8;
-  font-size: 14px;
+  gap: 6px;
+  border: 1px solid #8b6914;
+  border-radius: 7px;
+  padding: 9px 10px;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.correct-answer-label input[type='radio'] {
-  cursor: pointer;
-  width: 16px;
-  height: 16px;
+.correct-answer-label.selected {
+  border-color: #5fbb72;
+  background: rgba(95, 187, 114, 0.12);
+  color: #8be19b;
 }
+
+.points-preview {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #f0e6c8;
+}
+
+.points-preview strong { color: #c9a84c; }
 
 .form-actions {
   display: flex;
   gap: 10px;
-  margin-top: 15px;
 }
 
 .btn-submit,
 .btn-cancel {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  font-weight: bold;
+  padding: 12px 18px;
+  border-radius: 7px;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.3s ease;
   text-transform: uppercase;
-  font-size: 14px;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #c9a84c 0%, #8b6914 100%);
-  color: #1a0a00;
   flex: 1;
-}
-
-.btn-submit:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(201, 168, 76, 0.3);
+  border: none;
+  background: linear-gradient(135deg, #d6b75f, #8b6914);
+  color: #1a0a00;
 }
 
 .btn-cancel {
-  background: rgba(201, 168, 76, 0.2);
-  color: #f0e6c8;
   border: 1px solid #8b6914;
+  background: transparent;
+  color: #f0e6c8;
 }
 
-.btn-cancel:hover {
-  background: rgba(201, 168, 76, 0.3);
+@media (max-width: 700px) {
+  .form-row { grid-template-columns: 1fr; }
+  .option-input { grid-template-columns: 30px 1fr; }
+  .correct-answer-label { grid-column: 2; }
+  .form-actions { flex-direction: column; }
+  .points-preview { align-items: flex-start; flex-direction: column; }
 }
 </style>
