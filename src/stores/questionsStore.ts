@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { questionsService } from '@/modules/questions/questionsService'
 import { DEFAULT_QUESTIONS } from '@/modules/questions/defaultQuestions'
+import { LEGACY_STARTER_QUESTIONS } from '@/modules/questions/legacyStarterQuestions'
 import { isQuestionAllowedForDegree } from '@/modules/questions/questionRules'
 import type { MasonicDegree, Question } from '@/modules/questions/types'
 
@@ -9,6 +10,8 @@ interface LoadQuestionsOptions {
   force?: boolean
   fallbackToDefaults?: boolean
 }
+
+const STARTER_QUESTIONS = [...DEFAULT_QUESTIONS, ...LEGACY_STARTER_QUESTIONS]
 
 export const useQuestionsStore = defineStore('questions', () => {
   const questions = ref<Question[]>([])
@@ -31,7 +34,7 @@ export const useQuestionsStore = defineStore('questions', () => {
   })
 
   const useDefaults = () => {
-    questions.value = DEFAULT_QUESTIONS.map((question) => ({ ...question }))
+    questions.value = STARTER_QUESTIONS.map((question) => ({ ...question }))
     usingDefaultQuestions.value = true
   }
 
