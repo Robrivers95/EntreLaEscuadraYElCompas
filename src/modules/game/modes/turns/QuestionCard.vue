@@ -1,208 +1,189 @@
 <template>
   <div class="question-card">
     <div class="question-header">
-      <div class="difficulty-badge" :class="question.difficulty">
-        {{ difficultyLabel(question.difficulty) }}
-      </div>
+      <div class="difficulty-badge" :class="question.difficulty">{{ difficultyLabel }}</div>
       <div class="category-badge">{{ question.category }}</div>
     </div>
 
     <div class="question-content">
       <h3>{{ question.text }}</h3>
 
-      <div class="options-container">
+      <div v-if="!optionsVisible && !resolved" class="direct-mode">
+        <div class="bonus-banner">
+          <strong>Reto sin incisos · {{ directPoints }} pts</strong>
+          <span>Responde antes de ver A–D para ganar el doble.</span>
+        </div>
+        <div class="direct-input-row">
+          <input
+            v-model="directAnswer"
+            class="direct-input"
+            type="text"
+            placeholder="Escribe la respuesta…"
+            @keyup.enter="submitDirectAnswer"
+          />
+          <button class="btn-direct" :disabled="!directAnswer.trim()" @click="submitDirectAnswer">
+            Responder sin incisos
+          </button>
+        </div>
+        <button class="btn-show-options" @click="showOptions">Leer incisos ({{ normalPoints }} pts)</button>
+      </div>
+
+      <div v-if="directAttemptFailed && optionsVisible && !resolved" class="attempt-message">
+        No fue respuesta directa correcta. Ahora puedes responder con los incisos por {{ normalPoints }} pts.
+      </div>
+
+      <div v-if="optionsVisible && !resolved" class="options-container">
         <button
           v-for="(option, index) in question.options"
           :key="index"
           class="option-button"
           :class="{ selected: selectedOption === index }"
-          @click="selectOption(index)"
+          @click="selectedOption = index"
         >
-          {{ String.fromCharCode(65 + index) }}. {{ option }}
+          <span class="option-letter">{{ String.fromCharCode(65 + index) }}</span>
+          <span>{{ option }}</span>
         </button>
+        <button class="btn-submit" :disabled="selectedOption === null" @click="submitMultipleChoice">
+          Confirmar respuesta
+        </button>
+      </div>
+
+      <div v-if="resolved" class="result-box" :class="{ correct: lastResultCorrect, incorrect: !lastResultCorrect }">
+        <strong>{{ lastResultCorrect ? 'Respuesta correcta' : 'Respuesta incorrecta' }}</strong>
+        <p v-if="question.explanation">{{ question.explanation }}</p>
       </div>
     </div>
 
     <div class="card-actions">
-      <button @click="handleSubmit" :disabled="selectedOption === null" class="btn-submit">
-        Responder
-      </button>
-      <button @click="$emit('skip')" class="btn-skip">Saltar</button>
+      <button v-if="!resolved" class="btn-skip" @click="$emit('skip')">Saltar pregunta</button>
+      <button v-else class="btn-next" @click="finishQuestion">Continuar</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import type { Question } from '@/modules/questions/types'
+import { computed, ref, watch } from 'vue'
+import { DEGREE_LABELS, getQuestionPoints, isDirectAnswerCorrect } from '@/modules/questions/questionRules'
+import type { AnswerMode, Question } from '@/modules/questions/types'
 
 interface Props {
   question: Question
 }
 
+interface Resolution {
+  correct: boolean
+  mode: AnswerMode
+}
+
 interface Emits {
-  (e: 'answer', answerIndex: number): void
+  (e: 'resolved', resolution: Resolution): void
   (e: 'skip'): void
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+const directAnswer = ref('')
 const selectedOption = ref<number | null>(null)
+const optionsVisible = ref(false)
+const directAttemptFailed = ref(false)
+const resolved = ref(false)
+const lastResultCorrect = ref(false)
+const pendingResolution = ref<Resolution | null>(null)
 
-const selectOption = (index: number) => {
-  selectedOption.value = index
+const difficultyLabel = computed(() => DEGREE_LABELS[props.question.difficulty])
+const normalPoints = computed(() => getQuestionPoints(props.question, 'multiple-choice'))
+const directPoints = computed(() => getQuestionPoints(props.question, 'direct'))
+
+const resetState = () => {
+  directAnswer.value = ''
+  selectedOption.value = null
+  optionsVisible.value = false
+  directAttemptFailed.value = false
+  resolved.value = false
+  lastResultCorrect.value = false
+  pendingResolution.value = null
 }
 
-const handleSubmit = () => {
-  if (selectedOption.value !== null) {
-    emit('answer', selectedOption.value)
-  }
+watch(() => props.question.id, resetState, { immediate: true })
+
+const showOptions = () => {
+  optionsVisible.value = true
 }
 
+const submitDirectAnswer = () => {
+  if (!directAnswer.value.trim()) return
+  const correct = isDirectAnswerCorrect(props.question, directAnswer.value)
 
-const difficultyLabel = (difficulty: string): string => {
-  const labels: Record<string, string> = {
-    aprendiz: 'Aprendiz',
-    compañero: 'Compañero',
-    maestro: 'Maestro',
+  if (correct) {
+    lastResultCorrect.value = true
+    pendingResolution.value = { correct: true, mode: 'direct' }
+    resolved.value = true
+    return
   }
-  return labels[difficulty] || difficulty
+
+  directAttemptFailed.value = true
+  optionsVisible.value = true
+}
+
+const submitMultipleChoice = () => {
+  if (selectedOption.value === null) return
+  const correct = selectedOption.value === props.question.correctAnswer
+  lastResultCorrect.value = correct
+  pendingResolution.value = { correct, mode: 'multiple-choice' }
+  resolved.value = true
+}
+
+const finishQuestion = () => {
+  if (!pendingResolution.value) return
+  emit('resolved', pendingResolution.value)
 }
 </script>
 
 <style scoped>
 .question-card {
-  background: rgba(201, 168, 76, 0.05);
+  background: radial-gradient(circle at 50% 0%, rgba(201,168,76,.13), rgba(26,10,0,.94) 58%);
   border: 2px solid #c9a84c;
-  border-radius: 10px;
+  border-radius: 16px;
   padding: 25px;
-  max-width: 500px;
+  max-width: 560px;
   margin: 20px auto;
+  box-shadow: 0 20px 55px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.04);
 }
 
-.question-header {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
+.question-header { display: flex; gap: 10px; margin-bottom: 20px; }
+.difficulty-badge, .category-badge { padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; text-transform: uppercase; color: white; }
+.difficulty-badge { flex: 1; }
+.difficulty-badge.aprendiz { background: rgba(76,175,80,.82); }
+.difficulty-badge.compañero { background: rgba(230,165,20,.85); }
+.difficulty-badge.maestro { background: rgba(190,65,58,.86); }
+.category-badge { background: rgba(139,105,20,.5); color: #f0e6c8; border: 1px solid #8b6914; }
+.question-content h3 { color: #f0e6c8; margin: 0 0 22px; font-size: 21px; line-height: 1.45; }
 
-.difficulty-badge,
-.category-badge {
-  padding: 6px 12px;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: white;
-  border: none;
-}
-
-.difficulty-badge {
-  flex: 1;
-}
-
-.difficulty-badge.aprendiz {
-  background: rgba(76, 175, 80, 0.8);
-}
-
-.difficulty-badge.compañero {
-  background: rgba(255, 193, 7, 0.8);
-}
-
-.difficulty-badge.maestro {
-  background: rgba(244, 67, 54, 0.8);
-}
-
-.category-badge {
-  background: rgba(139, 105, 20, 0.5);
-  color: #f0e6c8;
-  border: 1px solid #8b6914;
-}
-
-.question-content {
-  margin: 20px 0;
-}
-
-.question-content h3 {
-  color: #f0e6c8;
-  margin: 0 0 20px 0;
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-.options-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.option-button {
-  background: rgba(139, 105, 20, 0.2);
-  border: 2px solid #8b6914;
-  border-radius: 8px;
-  padding: 15px;
-  color: #f0e6c8;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 500;
-}
-
-.option-button:hover {
-  border-color: #c9a84c;
-  background: rgba(201, 168, 76, 0.15);
-}
-
-.option-button.selected {
-  background: rgba(201, 168, 76, 0.3);
-  border-color: #c9a84c;
-  box-shadow: 0 0 10px rgba(201, 168, 76, 0.3);
-}
-
-.card-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.btn-submit,
-.btn-skip {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 5px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-}
-
-.btn-submit {
-  background: linear-gradient(135deg, #c9a84c 0%, #8b6914 100%);
-  color: #1a0a00;
-}
-
-.btn-submit:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(201, 168, 76, 0.3);
-}
-
-.btn-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-skip {
-  background: rgba(201, 168, 76, 0.2);
-  color: #f0e6c8;
-  border: 1px solid #8b6914;
-}
-
-.btn-skip:hover {
-  background: rgba(201, 168, 76, 0.3);
-}
+.direct-mode { display: grid; gap: 13px; }
+.bonus-banner { display: flex; flex-direction: column; gap: 3px; padding: 13px 15px; border: 1px solid rgba(201,168,76,.55); border-radius: 10px; background: rgba(201,168,76,.08); }
+.bonus-banner strong { color: #e7ca77; }
+.bonus-banner span { color: rgba(240,230,200,.7); font-size: 12px; }
+.direct-input-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.direct-input { min-width: 0; padding: 12px; background: rgba(0,0,0,.2); border: 1px solid #8b6914; border-radius: 8px; color: #f0e6c8; }
+.btn-direct, .btn-show-options, .btn-submit, .btn-skip, .btn-next { border-radius: 8px; font-weight: 800; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, background .2s ease; }
+.btn-direct { border: none; padding: 11px 14px; background: linear-gradient(135deg,#e0c16c,#8b6914); color: #1a0a00; }
+.btn-show-options { padding: 11px; border: 1px solid #8b6914; background: rgba(201,168,76,.08); color: #f0e6c8; }
+.btn-direct:hover:not(:disabled), .btn-submit:hover:not(:disabled), .btn-next:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(201,168,76,.2); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.attempt-message { margin-bottom: 12px; padding: 10px 12px; border-left: 3px solid #d59a3a; background: rgba(213,154,58,.09); color: #f0d4a6; font-size: 13px; }
+.options-container { display: flex; flex-direction: column; gap: 10px; }
+.option-button { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; background: rgba(139,105,20,.18); border: 1px solid #8b6914; border-radius: 10px; padding: 12px; color: #f0e6c8; text-align: left; cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+.option-button:hover { transform: translateX(3px); border-color: #c9a84c; background: rgba(201,168,76,.12); }
+.option-button.selected { border-color: #e2c86e; background: rgba(201,168,76,.22); box-shadow: 0 0 0 2px rgba(201,168,76,.08); }
+.option-letter { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.24); color: #e2c86e; font-weight: 900; }
+.btn-submit { margin-top: 4px; padding: 12px; border: none; background: linear-gradient(135deg,#d6b75f,#8b6914); color: #1a0a00; }
+.result-box { margin-top: 15px; padding: 15px; border-radius: 10px; }
+.result-box.correct { background: rgba(76,175,80,.12); border: 1px solid rgba(76,175,80,.55); color: #9be4a6; }
+.result-box.incorrect { background: rgba(244,67,54,.11); border: 1px solid rgba(244,67,54,.45); color: #ff9d98; }
+.result-box p { margin: 8px 0 0; color: #f0e6c8; font-size: 13px; }
+.card-actions { display: flex; gap: 10px; margin-top: 18px; }
+.btn-skip { flex: 1; padding: 10px; border: 1px solid #8b6914; background: transparent; color: rgba(240,230,200,.75); }
+.btn-next { flex: 1; padding: 11px; border: none; background: linear-gradient(135deg,#d6b75f,#8b6914); color: #1a0a00; }
+@media (max-width: 620px) { .direct-input-row { grid-template-columns: 1fr; } }
 </style>
