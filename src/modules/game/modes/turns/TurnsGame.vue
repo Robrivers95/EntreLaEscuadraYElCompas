@@ -3,9 +3,14 @@
     <header class="game-header" v-if="room">
       <button class="back" @click="leave">← Lobby</button>
       <div class="room-title"><span>{{ riteLabel }}</span><h1>{{ room.name }}</h1><p>{{ room.boardSize }} casillas · {{ levelLabel }} · {{ room.players.length }}/{{ room.maxPlayers }} jugadores</p></div>
-      <div class="turn-box"><small>{{ room.status === 'waiting' ? 'Sala de espera' : room.status === 'finished' ? 'Partida terminada' : 'Turno actual' }}</small><strong>{{ currentPlayer?.name || '—' }}</strong></div>
+      <div class="header-actions">
+        <div class="turn-box"><small>{{ room.status === 'waiting' ? 'Sala de espera' : room.status === 'finished' ? 'Partida terminada' : 'Turno actual' }}</small><strong>{{ currentPlayer?.name || '—' }}</strong></div>
+        <button v-if="voiceAvailable" class="voice-btn" :class="{ connected: voiceConnected, muted: voiceMuted }" @click="voiceConnected ? toggleVoice() : connectVoice()">{{ !voiceConnected ? '🎙 Conectar voz' : voiceMuted ? '🔇 Activar micrófono' : '🎤 Silenciar' }}</button>
+        <span v-else class="voice-unavailable">Voz disponible al configurar Agora</span>
+      </div>
     </header>
 
+    <div v-if="voiceError" class="voice-error">{{ voiceError }}</div>
     <section v-if="!room" class="state-panel"><h2>Cargando sala…</h2></section>
 
     <section v-else-if="room.status === 'waiting'" class="waiting-panel">
@@ -70,6 +75,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useQuestionsStore } from '@/stores/questionsStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/modules/game/lobby/roomService'
+import { audioService } from '@/modules/game/modes/realtime/audioService'
 import { DEGREE_LABELS, GENERAL_CATEGORIES, MASONIC_CATEGORIES, RITE_LABELS, getQuestionPoints } from '@/modules/questions/questionRules'
 import type { AnswerMode, Question } from '@/modules/questions/types'
 import type { Player } from '@/modules/game/types'
@@ -86,6 +92,10 @@ const diceRolling = ref(false)
 const diceResult = ref<number | null>(null)
 const turnMessage = ref('')
 const recentQuestionIds = ref<string[]>([])
+const voiceConnected = ref(false)
+const voiceMuted = ref(false)
+const voiceError = ref('')
+const voiceAvailable = audioService.isConfigured()
 
 const colors = ['#c94f4f','#4f8cc9','#55a56b','#bd8f37','#8e66c2','#4ea5a5','#c56a9c','#8c9a4c']
 const categories = computed<string[]>(() => room.value?.rite === 'libre' ? [...GENERAL_CATEGORIES] : [...MASONIC_CATEGORIES])
@@ -109,9 +119,41 @@ onMounted(async () => {
   await questionsStore.loadQuestions({ fallbackToDefaults: true })
   roomStore.watchRoom(roomId.value)
 })
-onBeforeUnmount(() => roomStore.stop())
+onBeforeUnmount(() => {
+  roomStore.stop()
+  if (voiceConnected.value) void audioService.leave()
+})
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0,2).map((part) => part[0]?.toUpperCase()).join('') || 'J'
+
+const connectVoice = async () => {
+  if (!roomId.value || !authStore.currentUser) return
+  voiceError.value = ''
+  try {
+    await audioService.initialize(`mesa-${roomId.value}`)
+    await audioService.join(authStore.currentUser.uid)
+    await audioService.publishAudio()
+    voiceConnected.value = true
+    voiceMuted.value = false
+  } catch (error) {
+    console.error(error)
+    voiceError.value = error instanceof Error ? error.message : 'No se pudo conectar el audio de la sala.'
+    try { await audioService.leave() } catch { /* no-op */ }
+    voiceConnected.value = false
+  }
+}
+
+const toggleVoice = async () => {
+  if (!voiceConnected.value) return
+  const enabled = voiceMuted.value
+  try {
+    await audioService.toggleAudio(enabled)
+    voiceMuted.value = !enabled
+  } catch (error) {
+    console.error(error)
+    voiceError.value = 'No se pudo cambiar el estado del micrófono.'
+  }
+}
 
 const startGame = async () => {
   if (!room.value || !isHost.value) return
@@ -184,6 +226,10 @@ const advanceTurn = async (players: RoomPlayer[]) => {
 }
 
 const leave = async () => {
+  if (voiceConnected.value) {
+    try { await audioService.leave() } catch (error) { console.warn(error) }
+    voiceConnected.value = false
+  }
   if (room.value && authStore.currentUser) {
     try { await roomStore.leaveRoom(room.value.id, authStore.currentUser.uid) } catch (error) { console.warn(error) }
   }
@@ -192,5 +238,5 @@ const leave = async () => {
 </script>
 
 <style scoped>
-.turns-game{min-height:100vh;padding:18px 18px 55px;background:radial-gradient(circle at 50% -10%,rgba(37,75,117,.34),transparent 38%),#050a11;color:#eee0c2}.game-header{max-width:1240px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding-bottom:15px;border-bottom:1px solid rgba(214,183,95,.23)}.back{border:1px solid rgba(214,183,95,.3);background:transparent;color:#d9c17a;padding:9px;border-radius:7px}.room-title span,.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:#c6a44d}.room-title h1{margin:1px 0;color:#f0d992;font:700 30px Georgia}.room-title p{margin:0;color:rgba(238,224,194,.5)}.turn-box{display:flex;flex-direction:column;text-align:right}.turn-box strong{color:#efdba7}.state-panel,.waiting-panel,.finished-panel{max-width:760px;margin:50px auto;text-align:center;padding:35px;border:1px solid rgba(214,183,95,.25);border-radius:14px;background:rgba(8,22,36,.82)}.seal-line{font:700 28px Georgia;color:#c7aa57}.waiting-panel h2,.finished-panel h2{color:#efdb9a;font-family:Georgia,serif}.waiting-panel>p{color:rgba(238,224,194,.57)}.players-waiting{display:grid;gap:8px;margin:20px 0}.waiting-player{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid rgba(214,183,95,.15);border-radius:8px;text-align:left}.waiting-player div{display:flex;flex:1;flex-direction:column}.waiting-player em{font-size:10px;color:#d2b863}.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c9a84c,#604817);color:#08111b;font-weight:900}.waiting-actions{display:flex;justify-content:center}.primary{border:0;border-radius:8px;padding:11px 15px;background:linear-gradient(135deg,#e1c36c,#8b6914);color:#07101a;font-weight:900}.primary:disabled{opacity:.35}.trophy{font-size:52px}.final-scores{display:grid;gap:7px;margin:20px}.final-scores div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid rgba(214,183,95,.12)}.turn-message{max-width:1240px;margin:13px auto;padding:9px 12px;border-left:3px solid #b88d30;background:rgba(184,141,48,.07);color:#e1cb8c}.game-grid{max-width:1240px;margin:18px auto;display:grid;grid-template-columns:1.12fr .88fr;gap:20px;align-items:center}.board-column{min-width:0}.room-legend{display:flex;justify-content:space-between;margin-top:8px;color:rgba(238,224,194,.42);font-size:10px}.action-column{min-height:400px;display:grid;place-items:center}.dice-panel,.spectator-question{width:100%;max-width:520px;padding:25px;border:1px solid rgba(214,183,95,.27);border-radius:14px;background:rgba(8,22,36,.82);text-align:center}.dice-panel.mine{border-color:#c9a84c}.dice{font-size:92px;color:#e3ca78;margin:15px;filter:drop-shadow(0 10px 14px #000)}.dice.rolling{animation:roll .28s linear infinite}@keyframes roll{50%{transform:rotate(18deg) scale(1.1)}100%{transform:rotate(-15deg)}}.roll{min-width:190px}.dice-panel p{color:rgba(238,224,194,.55)}.dice-panel p strong{color:#e3c976}.dice-panel small{display:block;margin-top:10px;color:rgba(238,224,194,.38);text-transform:none}.spectator-question{text-align:left}.spectator-question h2{color:#f0e1bd;line-height:1.4}.readonly-option{display:grid;grid-template-columns:32px 1fr;gap:8px;padding:9px;margin:6px 0;border:1px solid rgba(214,183,95,.16);border-radius:7px;color:rgba(238,224,194,.74)}.readonly-option b{color:#e0c36d}.spectator-question p{font-size:11px;color:rgba(238,224,194,.42)}.score-strip{max-width:1240px;margin:auto;display:flex;gap:8px;flex-wrap:wrap}.score-strip article{flex:1;min-width:180px;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid rgba(214,183,95,.16);border-radius:9px;background:rgba(7,18,30,.72)}.score-strip article.active{border-color:#c9a84c;background:rgba(201,168,76,.07)}.score-strip article div{display:flex;flex-direction:column}.score-strip article>b{color:#e2c874}.small-avatar{width:30px;height:30px;font-size:10px}@media(max-width:900px){.game-grid{grid-template-columns:1fr}.game-header{grid-template-columns:auto 1fr}.turn-box{grid-column:1/-1;text-align:left}}@media(max-width:540px){.game-header{grid-template-columns:1fr}.room-title{text-align:center}.back{justify-self:start}}
+.turns-game{min-height:100vh;padding:18px 18px 55px;background:radial-gradient(circle at 50% -10%,rgba(37,75,117,.34),transparent 38%),#050a11;color:#eee0c2}.game-header{max-width:1240px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding-bottom:15px;border-bottom:1px solid rgba(214,183,95,.23)}.back{border:1px solid rgba(214,183,95,.3);background:transparent;color:#d9c17a;padding:9px;border-radius:7px}.room-title span,.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:#c6a44d}.room-title h1{margin:1px 0;color:#f0d992;font:700 30px Georgia}.room-title p{margin:0;color:rgba(238,224,194,.5)}.header-actions{display:flex;gap:10px;align-items:center}.turn-box{display:flex;flex-direction:column;text-align:right}.turn-box strong{color:#efdba7}.voice-btn{border:1px solid rgba(214,183,95,.35);border-radius:8px;padding:9px 11px;background:rgba(214,183,95,.06);color:#e0cb91;font-weight:800}.voice-btn.connected{border-color:rgba(73,164,103,.55);color:#9ad9ab}.voice-btn.muted{border-color:rgba(190,86,78,.55);color:#e5a19c}.voice-unavailable{max-width:120px;text-align:right;font-size:9px;color:rgba(238,224,194,.32)}.voice-error{max-width:1240px;margin:9px auto;padding:9px 12px;border-left:3px solid #b34f4a;background:rgba(179,79,74,.09);color:#e6aaa6;font-size:11px}.state-panel,.waiting-panel,.finished-panel{max-width:760px;margin:50px auto;text-align:center;padding:35px;border:1px solid rgba(214,183,95,.25);border-radius:14px;background:rgba(8,22,36,.82)}.seal-line{font:700 28px Georgia;color:#c7aa57}.waiting-panel h2,.finished-panel h2{color:#efdb9a;font-family:Georgia,serif}.waiting-panel>p{color:rgba(238,224,194,.57)}.players-waiting{display:grid;gap:8px;margin:20px 0}.waiting-player{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid rgba(214,183,95,.15);border-radius:8px;text-align:left}.waiting-player div{display:flex;flex:1;flex-direction:column}.waiting-player em{font-size:10px;color:#d2b863}.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c9a84c,#604817);color:#08111b;font-weight:900}.waiting-actions{display:flex;justify-content:center}.primary{border:0;border-radius:8px;padding:11px 15px;background:linear-gradient(135deg,#e1c36c,#8b6914);color:#07101a;font-weight:900}.primary:disabled{opacity:.35}.trophy{font-size:52px}.final-scores{display:grid;gap:7px;margin:20px}.final-scores div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid rgba(214,183,95,.12)}.turn-message{max-width:1240px;margin:13px auto;padding:9px 12px;border-left:3px solid #b88d30;background:rgba(184,141,48,.07);color:#e1cb8c}.game-grid{max-width:1240px;margin:18px auto;display:grid;grid-template-columns:1.12fr .88fr;gap:20px;align-items:center}.board-column{min-width:0}.room-legend{display:flex;justify-content:space-between;margin-top:8px;color:rgba(238,224,194,.42);font-size:10px}.action-column{min-height:400px;display:grid;place-items:center}.dice-panel,.spectator-question{width:100%;max-width:520px;padding:25px;border:1px solid rgba(214,183,95,.27);border-radius:14px;background:rgba(8,22,36,.82);text-align:center}.dice-panel.mine{border-color:#c9a84c}.dice{font-size:92px;color:#e3ca78;margin:15px;filter:drop-shadow(0 10px 14px #000)}.dice.rolling{animation:roll .28s linear infinite}@keyframes roll{50%{transform:rotate(18deg) scale(1.1)}100%{transform:rotate(-15deg)}}.roll{min-width:190px}.dice-panel p{color:rgba(238,224,194,.55)}.dice-panel p strong{color:#e3c976}.dice-panel small{display:block;margin-top:10px;color:rgba(238,224,194,.38);text-transform:none}.spectator-question{text-align:left}.spectator-question h2{color:#f0e1bd;line-height:1.4}.readonly-option{display:grid;grid-template-columns:32px 1fr;gap:8px;padding:9px;margin:6px 0;border:1px solid rgba(214,183,95,.16);border-radius:7px;color:rgba(238,224,194,.74)}.readonly-option b{color:#e0c36d}.spectator-question p{font-size:11px;color:rgba(238,224,194,.42)}.score-strip{max-width:1240px;margin:auto;display:flex;gap:8px;flex-wrap:wrap}.score-strip article{flex:1;min-width:180px;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid rgba(214,183,95,.16);border-radius:9px;background:rgba(7,18,30,.72)}.score-strip article.active{border-color:#c9a84c;background:rgba(201,168,76,.07)}.score-strip article div{display:flex;flex-direction:column}.score-strip article>b{color:#e2c874}.small-avatar{width:30px;height:30px;font-size:10px}@media(max-width:980px){.header-actions{align-items:flex-end;flex-direction:column}.game-grid{grid-template-columns:1fr}.game-header{grid-template-columns:auto 1fr}.header-actions{grid-column:1/-1;justify-self:stretch;flex-direction:row;justify-content:space-between}.turn-box{text-align:left}}@media(max-width:540px){.game-header{grid-template-columns:1fr}.room-title{text-align:center}.back{justify-self:start}.header-actions{flex-direction:column;align-items:stretch}.voice-btn{width:100%}}
 </style>
