@@ -1,301 +1,163 @@
 <template>
-  <div class="game-select-view">
-    <div class="temple-columns" aria-hidden="true">
-      <div class="column column-left"><span>B</span></div>
-      <div class="column column-right"><span>J</span></div>
-    </div>
-
-    <main class="select-container slide-in">
-      <header class="temple-header">
-        <div class="header-stars" aria-hidden="true">✦ · ✧ · ✦ · ✧ · ✦</div>
-        <MasonicSeal :size="126" />
-        <span class="masonic-kicker">Salón de juego</span>
-        <h1>Entre la Escuadra<br />y el Compás</h1>
-        <p>Conocimiento, simbolismo y tradición en un tablero masónico.</p>
-        <div class="symbol-ribbon" aria-hidden="true">
-          <span>☉</span><span>△</span><span>□</span><strong>G</strong><span>✦</span><span>☽</span><span>⚒</span>
+  <div class="lobby-view">
+    <div class="temple-columns" aria-hidden="true"><span>B</span><span>J</span></div>
+    <main class="lobby-shell">
+      <header class="lobby-header">
+        <MasonicSeal :size="104" />
+        <div>
+          <span class="kicker">Lobby general</span>
+          <h1>Entre la Escuadra y el Compás</h1>
+          <p>Entra primero al salón. El rito ya no te separa de los demás: cada mesa muestra sus reglas y tú decides dónde jugar.</p>
         </div>
+        <button class="logout" @click="logout">Salir</button>
       </header>
 
-      <div class="mosaic-strip"></div>
-
-      <section class="member-card temple-panel" v-if="authStore.profile">
-        <div class="member-identity">
-          <div class="mini-seal"><MasonicSeal :size="74" compact tone="muted" /></div>
-          <div>
-            <span class="eyebrow">Perfil validado por Registro Logia</span>
-            <h2>{{ authStore.profile.name }}</h2>
-            <p>{{ authStore.profile.email }}</p>
-          </div>
-        </div>
-        <div class="member-badges">
-          <span class="degree-badge" :class="authStore.masonicDegree || 'none'">
-            <span class="badge-symbol">△</span>{{ degreeLabel }}
-          </span>
-          <span class="status-badge" :class="{ inactive: !authStore.canPlay }">
-            {{ authStore.canPlay ? '● Habilitado para jugar' : '● Perfil sin acceso de juego' }}
-          </span>
-        </div>
-      </section>
-
-      <section class="rite-panel temple-panel">
-        <div class="rite-copy">
-          <span class="eyebrow">Rito de la partida</span>
-          <h2>Escoge el cuerpo de conocimiento</h2>
-          <p>Las preguntas se separan por rito para evitar mezclar liturgias o enseñanzas de distintas tradiciones.</p>
-        </div>
-
-        <div class="rite-selector-wrap">
-          <div class="rite-medallion">{{ gameStore.selectedRite === 'reaa' ? '33°' : '✦' }}</div>
-          <select :value="gameStore.selectedRite" @change="changeRite" class="rite-select">
-            <option v-for="rite in MASONIC_RITES" :key="rite.value" :value="rite.value">
-              {{ rite.label }}{{ rite.value === 'reaa' ? ' · banco incluido' : ' · requiere banco propio' }}
-            </option>
+      <section v-if="authStore.profile" class="member-bar">
+        <div><small>Hermano</small><strong>{{ authStore.profile.name }}</strong></div>
+        <div><small>Grado Registro Logia</small><strong>{{ degreeLabel }}</strong></div>
+        <label>
+          <small>Mi rito habitual · sólo preferencia</small>
+          <select :value="preferredRite" @change="setPreferredRite">
+            <option v-for="rite in masonicRites" :key="rite.value" :value="rite.value">{{ rite.shortLabel }}</option>
           </select>
+        </label>
+        <div class="certifications"><small>Accesos aprobados</small><strong>{{ accessStore.verifiedRites.length || 0 }}</strong></div>
+      </section>
+
+      <nav class="mode-grid">
+        <button class="mode-card active" @click="activeMode = 'board'">
+          <span class="roman">I</span><b>🎲</b><h2>Maratón de tablero</h2><p>Crea o entra a una sala, tira el dado y avanza por casillas temáticas.</p>
+        </button>
+        <button class="mode-card" @click="router.push('/duels')">
+          <span class="roman">II</span><b>⚔</b><h2>Reto de 10</h2><p>Responde 10 preguntas y reta a otro usuario a contestar exactamente las mismas.</p>
+        </button>
+        <button class="mode-card" @click="router.push('/study')">
+          <span class="roman">III</span><b>📖</b><h2>Estudio individual</h2><p>Practica solo, recibe calificación y conserva el banco para uso offline en la app instalada.</p>
+        </button>
+      </nav>
+
+      <section v-if="activeMode === 'board'" class="board-lobby">
+        <div class="section-head">
+          <div><span class="kicker">Salas disponibles</span><h2>Mesas abiertas</h2><p>Puedes ver todos los ritos. Si una sala supera tu acceso actual, el juego te ofrece un examen antes de entrar.</p></div>
+          <button class="create-toggle" @click="showCreate = !showCreate">{{ showCreate ? 'Cerrar' : '＋ Crear sala' }}</button>
         </div>
 
-        <div class="selected-rite">
-          <div>
-            <small>Rito seleccionado</small>
-            <strong>{{ RITE_LABELS[gameStore.selectedRite] }}</strong>
-          </div>
-          <small v-if="gameStore.selectedRite === 'reaa'">
-            Banco inicial preparado para Aprendiz, Compañero y Maestro.
-          </small>
-          <small v-else>
-            La estructura está lista para cargar el banco correspondiente desde Administración.
-          </small>
+        <form v-if="showCreate" class="create-room" @submit.prevent="createRoom">
+          <label>Nombre de la sala<input v-model="newRoom.name" maxlength="45" placeholder="Ej. Cámara del Norte" /></label>
+          <label>Tipo de mesa<select v-model="newRoom.rite" @change="syncRoomConfig"><option v-for="rite in playableRites" :key="rite.value" :value="rite.value">{{ rite.label }}</option></select></label>
+          <label v-if="newRoom.rite !== 'libre'">Nivel de preguntas<select v-model="newRoom.level"><option value="aprendiz">Aprendiz</option><option value="compañero">Compañero</option><option value="maestro">Maestro</option></select></label>
+          <label>Jugadores<select v-model.number="newRoom.maxPlayers"><option :value="2">2</option><option :value="3">3</option><option :value="4">4</option><option :value="6">6</option><option :value="8">8</option></select></label>
+          <div class="board-rule"><strong>{{ roomConfig.boardSize }} casillas</strong><span>{{ roomConfig.boardNote }}</span></div>
+          <button class="primary" :disabled="roomStore.loading">Crear y entrar</button>
+        </form>
+
+        <div class="filters">
+          <button :class="{ selected: filterRite === '' }" @click="filterRite = ''">Todos</button>
+          <button v-for="rite in playableRites" :key="rite.value" :class="{ selected: filterRite === rite.value }" @click="filterRite = rite.value">{{ rite.shortLabel }}</button>
+        </div>
+
+        <div v-if="roomStore.error" class="empty error">{{ roomStore.error }}</div>
+        <div v-else-if="filteredRooms.length === 0" class="empty">
+          <span>△ □ G</span><h3>No hay salas con este filtro</h3><p>Crea una mesa. Los demás usuarios podrán verla desde el mismo lobby.</p>
+        </div>
+        <div v-else class="rooms-grid">
+          <article v-for="room in filteredRooms" :key="room.id" class="room-card" :class="{ free: room.rite === 'libre' }">
+            <div class="room-top"><span class="rite-chip">{{ shortRite(room.rite) }}</span><span class="state">{{ room.status === 'waiting' ? '● Esperando' : '▶ En juego' }}</span></div>
+            <h3>{{ room.name }}</h3>
+            <p class="host">Creada por {{ room.hostName }}</p>
+            <div class="room-stats"><span><b>{{ room.boardSize }}</b> casillas</span><span><b>{{ room.level === 'general' ? 'Libre' : levelLabel(room.level) }}</b> nivel</span><span><b>{{ room.players.length }}/{{ room.maxPlayers }}</b> jugadores</span></div>
+            <p v-if="room.rite === 'libre'" class="non-masonic">⚠ MODO NO MASÓN · cultura general</p>
+            <p v-else-if="needsExam(room)" class="exam-needed">🔐 Requiere examen de acceso para tu perfil actual</p>
+            <div class="room-actions">
+              <button class="primary" :disabled="room.status !== 'waiting' || room.players.length >= room.maxPlayers" @click="enterRoom(room)">{{ isMember(room) ? 'Volver a la mesa' : needsExam(room) ? 'Hacer reteje y entrar' : 'Entrar a la sala' }}</button>
+            </div>
+          </article>
         </div>
       </section>
 
-      <div v-if="!authStore.canPlay" class="access-warning">
-        <span>⚠</span>
-        <div>
-          <strong>Acceso de juego pendiente</strong>
-          <p>Necesitas un perfil activo de Registro Logia con grado masónico asignado.</p>
-        </div>
-      </div>
-
-      <section class="mode-heading">
-        <span class="masonic-kicker">Elige tu mesa</span>
-        <h2>¿Cómo quieres jugar?</h2>
-      </section>
-
-      <div class="modes-grid">
-        <router-link
-          to="/game/turns"
-          class="mode-card turns-card"
-          :class="{ disabled: !authStore.canPlay }"
-          @click="guardGameAccess"
-        >
-          <div class="corner-mark top-left">✦</div>
-          <div class="corner-mark bottom-right">✦</div>
-          <div class="mode-emblem">
-            <span class="large-symbol">⚄</span>
-            <span class="small-symbol">△</span>
-          </div>
-          <span class="mode-number">I</span>
-          <h2>Tablero por Turnos</h2>
-          <p>Avanza por las casillas del Templo y responde preguntas según categoría, rito y grado.</p>
-          <div class="mode-features">
-            <span><b>◆</b> Casillas temáticas</span>
-            <span><b>◆</b> Grado validado</span>
-            <span><b>◆</b> Doble puntaje sin incisos</span>
-          </div>
-          <span class="enter-table">Entrar a la mesa →</span>
-        </router-link>
-
-        <router-link
-          to="/game/realtime"
-          class="mode-card realtime-card"
-          :class="{ disabled: !authStore.canPlay }"
-          @click="guardGameAccess"
-        >
-          <div class="corner-mark top-left">✦</div>
-          <div class="corner-mark bottom-right">✦</div>
-          <div class="mode-emblem">
-            <span class="large-symbol">◉</span>
-            <span class="small-symbol">☉</span>
-          </div>
-          <span class="mode-number">II</span>
-          <h2>Salón en Tiempo Real</h2>
-          <p>Comparte la partida con otros Hermanos, sincronización en vivo y comunicación de voz.</p>
-          <div class="mode-features">
-            <span><b>◆</b> Multijugador</span>
-            <span><b>◆</b> Audio en vivo</span>
-            <span><b>◆</b> Sala compartida</span>
-          </div>
-          <span class="enter-table">Entrar al salón →</span>
-        </router-link>
-      </div>
-
-      <div class="mosaic-strip bottom-strip"></div>
-
-      <div class="user-info">
-        <button v-if="authStore.isAdmin" @click="router.push('/admin')" class="btn-admin">⚒ Banco de preguntas</button>
-        <button @click="logout" class="btn-logout">Cerrar sesión</button>
-      </div>
+      <footer class="lobby-footer">
+        <button v-if="authStore.isAdmin" @click="router.push('/admin')">⚒ Administrar preguntas</button>
+        <span>Las pruebas de acceso del juego no sustituyen un reteje oficial.</span>
+      </footer>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/authStore'
-import { useGameStore } from '@/stores/gameStore'
-import { DEGREE_LABELS, MASONIC_RITES, RITE_LABELS } from '@/modules/questions/questionRules'
-import type { MasonicRite } from '@/modules/questions/types'
 import MasonicSeal from '@/shared/MasonicSeal.vue'
+import { useAuthStore } from '@/stores/authStore'
+import { useAccessStore } from '@/stores/accessStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { DEGREE_LABELS, MASONIC_RITES, RITE_SHORT_LABELS } from '@/modules/questions/questionRules'
+import { RITE_GAME_CONFIG, requiresAccessExam } from '@/modules/game/access/riteAccess'
+import type { RoomLevel } from '@/modules/game/access/riteAccess'
+import type { BoardRoom } from '@/modules/game/lobby/types'
+import type { MasonicRite } from '@/modules/questions/types'
 
-const authStore = useAuthStore()
-const gameStore = useGameStore()
 const router = useRouter()
+const authStore = useAuthStore()
+const accessStore = useAccessStore()
+const roomStore = useRoomStore()
+const activeMode = ref<'board'>('board')
+const showCreate = ref(false)
+const filterRite = ref<MasonicRite | ''>('')
+const masonicRites = MASONIC_RITES.filter((rite) => rite.masonic && rite.value !== 'otro')
+const playableRites = MASONIC_RITES.filter((rite) => rite.value !== 'otro')
+const preferredRite = computed(() => accessStore.preferredRite ?? 'reaa')
+const degreeLabel = computed(() => authStore.masonicDegree ? DEGREE_LABELS[authStore.masonicDegree] : 'Sin grado')
 
-const degreeLabel = computed(() => authStore.masonicDegree
-  ? DEGREE_LABELS[authStore.masonicDegree]
-  : 'Grado no asignado')
+const newRoom = reactive<{ name: string; rite: MasonicRite; level: RoomLevel; maxPlayers: number }>({ name: '', rite: 'reaa', level: authStore.masonicDegree ?? 'aprendiz', maxPlayers: 4 })
+const roomConfig = computed(() => RITE_GAME_CONFIG[newRoom.rite])
+const filteredRooms = computed(() => roomStore.openRooms.filter((room) => !filterRite.value || room.rite === filterRite.value))
 
 onMounted(async () => {
-  if (authStore.currentUser && !authStore.profile) await authStore.refreshProfile()
+  if (authStore.currentUser) await accessStore.loadForUser(authStore.currentUser.uid)
+  roomStore.watchRooms()
 })
+onBeforeUnmount(() => roomStore.stop())
 
-const changeRite = (event: Event) => {
-  const value = (event.target as HTMLSelectElement).value as MasonicRite
-  gameStore.setSelectedRite(value)
+const syncRoomConfig = () => { newRoom.level = newRoom.rite === 'libre' ? 'general' : (authStore.masonicDegree ?? 'aprendiz') }
+const shortRite = (rite: MasonicRite) => RITE_SHORT_LABELS[rite]
+const levelLabel = (level: RoomLevel) => level === 'general' ? 'General' : DEGREE_LABELS[level]
+const isMember = (room: BoardRoom) => Boolean(authStore.currentUser && room.playerIds.includes(authStore.currentUser.uid))
+const needsExam = (room: BoardRoom) => requiresAccessExam(preferredRite.value, authStore.masonicDegree, room.rite, room.level, accessStore.certificationFor(room.rite))
+
+const setPreferredRite = async (event: Event) => {
+  if (!authStore.currentUser) return
+  await accessStore.setPreferredRite(authStore.currentUser.uid, (event.target as HTMLSelectElement).value as MasonicRite)
 }
 
-const guardGameAccess = (event: MouseEvent) => {
-  if (authStore.canPlay) return
-  event.preventDefault()
-  alert('Tu grado y estado deben estar validados en Registro Logia antes de jugar.')
+const createRoom = async () => {
+  if (!authStore.currentUser || !authStore.profile) return
+  const id = await roomStore.createRoom({
+    name: newRoom.name,
+    hostUid: authStore.currentUser.uid,
+    hostName: authStore.profile.name,
+    hostDegree: authStore.masonicDegree,
+    rite: newRoom.rite,
+    level: newRoom.rite === 'libre' ? 'general' : newRoom.level,
+    boardSize: roomConfig.value.boardSize,
+    maxPlayers: newRoom.maxPlayers,
+  })
+  router.push(`/game/turns?room=${id}`)
 }
 
-const logout = async () => {
-  await authStore.logOut()
-  router.push('/')
+const enterRoom = async (room: BoardRoom) => {
+  if (!authStore.currentUser || !authStore.profile) return
+  if (isMember(room)) { router.push(`/game/turns?room=${room.id}`); return }
+  if (needsExam(room)) {
+    router.push({ path: '/reteje', query: { rite: room.rite, level: room.level, room: room.id } })
+    return
+  }
+  await roomStore.joinRoom(room.id, { uid: authStore.currentUser.uid, name: authStore.profile.name, degree: authStore.masonicDegree, position: 0, score: 0, joinedAt: Date.now() })
+  router.push(`/game/turns?room=${room.id}`)
 }
+
+const logout = async () => { await authStore.logOut(); router.push('/') }
 </script>
 
 <style scoped>
-.game-select-view {
-  min-height: 100vh;
-  position: relative;
-  overflow: hidden;
-  padding: 32px 20px 56px;
-  background:
-    radial-gradient(circle at 50% 7%, rgba(213,183,97,.12), transparent 25rem),
-    linear-gradient(180deg, rgba(10,20,32,.35), rgba(3,5,8,.28));
-}
-.game-select-view::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(213,183,97,.025) 1px, transparent 1px), linear-gradient(rgba(213,183,97,.025) 1px, transparent 1px);
-  background-size: 38px 38px;
-  mask-image: radial-gradient(circle at 50% 20%, #000 0, transparent 64%);
-}
-.select-container { position: relative; z-index: 2; max-width: 1080px; margin: 0 auto; }
-.temple-header { text-align: center; display: flex; flex-direction: column; align-items: center; padding: 6px 20px 24px; }
-.header-stars { color: rgba(213,183,97,.42); letter-spacing: .9em; margin-bottom: -8px; font-size: 11px; }
-.temple-header h1 {
-  margin: 8px 0 7px;
-  color: #e1c978;
-  font-size: clamp(34px, 5vw, 56px);
-  line-height: .98;
-  text-transform: uppercase;
-  letter-spacing: .095em;
-  text-shadow: 0 4px 28px rgba(0,0,0,.72), 0 0 28px rgba(213,183,97,.08);
-}
-.temple-header p { margin: 7px 0 0; color: var(--masonic-muted); font-size: 15px; }
-.symbol-ribbon { display: flex; align-items: center; justify-content: center; gap: 17px; margin-top: 16px; color: rgba(213,183,97,.72); font-size: 17px; }
-.symbol-ribbon strong { font-family: Georgia, serif; font-size: 22px; color: #ecd786; }
-.mosaic-strip { margin: 0 0 22px; }
-.bottom-strip { margin: 7px 0 20px; }
-
-.temple-columns { pointer-events: none; position: fixed; inset: 0; z-index: 0; display: flex; justify-content: space-between; padding: 0 3vw; opacity: .18; }
-.column { position: relative; width: 74px; height: 100vh; border-left: 1px solid #d5b761; border-right: 1px solid #d5b761; background: repeating-linear-gradient(90deg, transparent 0 12px, rgba(213,183,97,.12) 12px 15px); }
-.column::before, .column::after { content: ''; position: absolute; left: -16px; width: 104px; height: 28px; border: 1px solid #d5b761; background: rgba(213,183,97,.09); }
-.column::before { top: 10px; } .column::after { bottom: 10px; }
-.column span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #d5b761; font-size: 44px; font-weight: 700; }
-
-.member-card, .rite-panel { border-radius: 4px; padding: 20px 22px; margin-bottom: 18px; }
-.member-card { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
-.member-identity { display: flex; align-items: center; gap: 14px; }
-.mini-seal { opacity: .7; }
-.member-card h2, .rite-panel h2 { color: #f3e9d1; margin: 3px 0; }
-.member-card p, .rite-panel p { color: var(--masonic-muted); margin: 4px 0; }
-.eyebrow { color: #cfb25e; font-size: 10px; text-transform: uppercase; letter-spacing: .16em; font-weight: 800; }
-.member-badges { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
-.degree-badge, .status-badge { border-radius: 3px; padding: 8px 11px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .045em; }
-.degree-badge { background: linear-gradient(135deg, rgba(213,183,97,.18), rgba(213,183,97,.06)); color: #ecd786; border: 1px solid #795b22; }
-.badge-symbol { margin-right: 6px; }
-.status-badge { background: rgba(65,132,86,.12); color: #a9ddb4; border: 1px solid rgba(86,156,106,.4); }
-.status-badge.inactive { background: rgba(139,49,52,.12); color: #e3a4a7; border-color: rgba(161,75,78,.45); }
-
-.rite-panel { display: grid; grid-template-columns: 1.2fr .9fr; gap: 14px 24px; align-items: center; }
-.rite-copy h2 { font-size: 23px; }
-.rite-selector-wrap { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 12px; }
-.rite-medallion { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: #ecd786; font-weight: 900; border: 1px solid #8a6828; box-shadow: inset 0 0 0 5px rgba(213,183,97,.05); background: rgba(213,183,97,.06); }
-.rite-select { width: 100%; padding: 13px; border-radius: 3px; }
-.selected-rite { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(180px,.65fr) 1.35fr; gap: 16px; align-items: center; padding-top: 14px; border-top: 1px solid rgba(213,183,97,.18); }
-.selected-rite > div { display: flex; flex-direction: column; }
-.selected-rite small { color: rgba(241,231,207,.52); }
-.selected-rite strong { color: #d9be6a; font-size: 14px; }
-
-.access-warning { display: flex; gap: 12px; align-items: center; padding: 13px 15px; margin-bottom: 20px; border: 1px solid rgba(174,81,83,.38); border-left: 4px solid #9a4549; background: rgba(107,28,34,.13); color: #e6b2b5; }
-.access-warning span { font-size: 22px; } .access-warning strong { color: #f1ccce; } .access-warning p { color: #d4a5a8; margin: 2px 0 0; font-size: 12px; }
-.mode-heading { text-align: center; margin: 29px 0 14px; }
-.mode-heading h2 { color: #eee2c3; font-size: 27px; margin-top: 3px; }
-
-.modes-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; margin: 12px 0 24px; }
-.mode-card {
-  position: relative;
-  overflow: hidden;
-  min-height: 390px;
-  border: 1px solid rgba(213,183,97,.42);
-  border-radius: 4px;
-  padding: 28px 28px 24px;
-  color: inherit;
-  background:
-    radial-gradient(circle at 50% 7%, rgba(213,183,97,.14), transparent 12rem),
-    linear-gradient(145deg, rgba(18,37,58,.94), rgba(7,11,17,.97) 58%, rgba(25,15,9,.95));
-  box-shadow: inset 0 0 0 5px rgba(213,183,97,.018), 0 18px 45px rgba(0,0,0,.3);
-  transition: .28s ease;
-  display: flex;
-  flex-direction: column;
-}
-.mode-card::after { content: ''; position: absolute; inset: 8px; border: 1px solid rgba(213,183,97,.12); pointer-events: none; }
-.mode-card:hover { border-color: #d5b761; transform: translateY(-6px) rotateX(1deg); box-shadow: inset 0 0 0 5px rgba(213,183,97,.025), 0 24px 55px rgba(0,0,0,.42), 0 0 30px rgba(213,183,97,.07); }
-.mode-card.disabled { opacity: .46; filter: grayscale(.52); }
-.corner-mark { position: absolute; color: rgba(213,183,97,.45); font-size: 12px; z-index: 2; }
-.corner-mark.top-left { top: 16px; left: 16px; } .corner-mark.bottom-right { right: 16px; bottom: 16px; }
-.mode-emblem { width: 96px; height: 96px; margin: 0 auto 8px; position: relative; display: grid; place-items: center; border-radius: 50%; border: 1px solid #8a6828; box-shadow: inset 0 0 0 6px rgba(213,183,97,.04), 0 0 22px rgba(213,183,97,.06); }
-.large-symbol { color: #e0c56f; font-size: 50px; line-height: 1; }
-.small-symbol { position: absolute; right: 4px; bottom: 3px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: #0d1621; border: 1px solid #8a6828; color: #d5b761; }
-.mode-number { text-align: center; color: rgba(213,183,97,.45); letter-spacing: .3em; font-size: 11px; }
-.mode-card h2 { color: #e3cc7f; text-align: center; margin: 7px 0 12px; font-size: 24px; }
-.mode-card p { color: rgba(241,231,207,.76); line-height: 1.55; text-align: center; flex: 1; }
-.mode-features { border-top: 1px solid rgba(213,183,97,.19); padding-top: 14px; display: grid; gap: 7px; color: #bda45f; font-size: 12px; }
-.mode-features b { font-size: 7px; margin-right: 6px; }
-.enter-table { margin-top: 18px; color: #ead17c; text-align: center; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-.user-info { display: flex; justify-content: center; gap: 10px; }
-.btn-logout, .btn-admin { padding: 10px 20px; border-radius: 3px; font-weight: 800; cursor: pointer; }
-.btn-logout { background: rgba(113,35,40,.12); color: #d9a4a6; border: 1px solid #743b40; }
-.btn-admin { background: rgba(213,183,97,.1); color: #e3cd84; border: 1px solid #765a24; }
-.btn-admin:hover, .btn-logout:hover { transform: translateY(-2px); }
-
-@media (max-width: 760px) {
-  .game-select-view { padding: 22px 14px 40px; }
-  .temple-columns { display: none; }
-  .header-stars { letter-spacing: .5em; }
-  .member-card { align-items: flex-start; flex-direction: column; }
-  .member-identity { align-items: flex-start; }
-  .mini-seal { display: none; }
-  .member-badges { justify-content: flex-start; }
-  .rite-panel, .modes-grid { grid-template-columns: 1fr; }
-  .selected-rite { grid-column: auto; grid-template-columns: 1fr; }
-  .mode-card { min-height: 350px; }
-}
+.lobby-view{min-height:100vh;padding:24px 18px 55px;background:radial-gradient(circle at 50% -5%,rgba(31,76,128,.35),transparent 38%),linear-gradient(180deg,#071321,#03070d 70%);position:relative}.lobby-shell{max-width:1180px;margin:auto;position:relative;z-index:2}.temple-columns{position:fixed;inset:0;display:flex;justify-content:space-between;align-items:center;padding:0 3vw;pointer-events:none;opacity:.08;font:700 92px Georgia;color:#d6b75f}.lobby-header{display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;padding:9px 0 21px;border-bottom:1px solid rgba(214,183,95,.26)}.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.6px;color:#cfae54}.lobby-header h1{margin:3px 0;color:#f0d98e;font-family:Georgia,serif;font-size:clamp(27px,4vw,42px)}.lobby-header p{margin:0;color:rgba(240,230,200,.62)}button{cursor:pointer}.logout,.lobby-footer button{border:1px solid rgba(214,183,95,.35);background:transparent;color:#dbc988;padding:9px 13px;border-radius:7px}.member-bar{display:grid;grid-template-columns:1.2fr .7fr 1fr .55fr;gap:10px;margin:17px 0;padding:13px;border:1px solid rgba(214,183,95,.24);background:rgba(9,24,40,.72);border-radius:12px}.member-bar>div,.member-bar label{display:flex;flex-direction:column;gap:2px;padding:7px 10px;border-right:1px solid rgba(214,183,95,.12)}.member-bar>*:last-child{border:0}.member-bar strong{color:#f0e2c2}.member-bar select{padding:5px 8px}.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:20px 0}.mode-card{position:relative;text-align:left;padding:18px;border:1px solid rgba(214,183,95,.26);border-radius:13px;background:linear-gradient(145deg,rgba(17,40,65,.78),rgba(4,12,21,.9));color:#f0e2c2;min-height:170px}.mode-card.active{border-color:#c9a84c;box-shadow:0 10px 32px rgba(0,0,0,.3)}.mode-card b{font-size:30px}.mode-card h2{font-size:18px;margin:8px 0;color:#e6cb75}.mode-card p{font-size:12px;color:rgba(240,230,200,.62);margin:0}.roman{position:absolute;right:13px;top:10px;color:rgba(214,183,95,.24);font:700 31px Georgia}.board-lobby{border:1px solid rgba(214,183,95,.24);border-radius:14px;padding:20px;background:rgba(3,10,18,.62)}.section-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.section-head h2{margin:3px 0;color:#f0dfb3;font-size:27px}.section-head p{margin:0;color:rgba(240,230,200,.58);max-width:700px}.create-toggle,.primary{border:0;border-radius:8px;padding:11px 15px;font-weight:900;background:linear-gradient(135deg,#e0c269,#8b6914);color:#07101a}.create-room{display:grid;grid-template-columns:1.2fr 1fr 1fr .6fr;gap:10px;margin:17px 0;padding:15px;background:rgba(214,183,95,.06);border:1px solid rgba(214,183,95,.22);border-radius:10px}.create-room label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#d5bd76}.create-room input,.create-room select{display:block;width:100%;margin-top:5px;padding:10px}.board-rule{grid-column:1/-2;display:flex;gap:12px;align-items:center;color:rgba(240,230,200,.6);font-size:11px}.board-rule strong{color:#e3c86e;white-space:nowrap}.filters{display:flex;gap:7px;flex-wrap:wrap;margin:19px 0 13px}.filters button{border:1px solid rgba(214,183,95,.22);background:transparent;color:#cdbb92;border-radius:999px;padding:7px 11px}.filters button.selected{background:#b58d35;color:#07101a}.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}.room-card{padding:16px;border:1px solid rgba(214,183,95,.25);border-radius:11px;background:linear-gradient(150deg,rgba(15,34,55,.86),rgba(3,10,18,.95))}.room-card.free{border-color:rgba(80,160,190,.45)}.room-top{display:flex;justify-content:space-between}.rite-chip,.state{font-size:10px;text-transform:uppercase;font-weight:900;letter-spacing:1px}.rite-chip{color:#e0c46e}.state{color:#82c89a}.room-card h3{margin:10px 0 2px;color:#f1e5cc}.host{margin:0;color:rgba(240,230,200,.48);font-size:11px}.room-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:14px 0}.room-stats span{padding:8px 4px;text-align:center;background:rgba(255,255,255,.035);font-size:9px;color:rgba(240,230,200,.5)}.room-stats b{display:block;color:#e2ca80;font-size:13px}.non-masonic,.exam-needed{font-size:10px;padding:8px;border-left:3px solid;margin:9px 0}.non-masonic{border-color:#55a0b8;color:#8fd0e0;background:rgba(50,130,160,.08)}.exam-needed{border-color:#bc9134;color:#e2c879;background:rgba(188,145,52,.08)}.room-actions .primary{width:100%}.primary:disabled{opacity:.35;cursor:not-allowed}.empty{text-align:center;padding:35px;border:1px dashed rgba(214,183,95,.23);border-radius:10px;color:rgba(240,230,200,.52)}.empty span{font:700 28px Georgia;color:#bda155}.empty h3{color:#e8d7b0}.empty.error{color:#e49f9f}.lobby-footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;color:rgba(240,230,200,.38);font-size:10px}@media(max-width:850px){.member-bar{grid-template-columns:1fr 1fr}.mode-grid{grid-template-columns:1fr}.create-room{grid-template-columns:1fr 1fr}.board-rule{grid-column:1/-1}.lobby-header{grid-template-columns:auto 1fr}.logout{grid-column:1/-1}.section-head{flex-direction:column}}@media(max-width:540px){.member-bar,.create-room{grid-template-columns:1fr}.lobby-header{grid-template-columns:1fr;text-align:center;justify-items:center}.room-stats{grid-template-columns:1fr 1fr 1fr}.lobby-footer{flex-direction:column;gap:10px}}
 </style>
