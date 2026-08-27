@@ -1,17 +1,22 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { questionsService } from '@/modules/questions/questionsService'
 import { DEFAULT_QUESTIONS } from '@/modules/questions/defaultQuestions'
 import { LEGACY_STARTER_QUESTIONS } from '@/modules/questions/legacyStarterQuestions'
-import { isQuestionAllowedForDegree } from '@/modules/questions/questionRules'
-import type { MasonicDegree, Question } from '@/modules/questions/types'
+import { REAA_LITURGICAL_QUESTIONS } from '@/modules/questions/reaaLiturgicalQuestions'
+import { getQuestionRite, isQuestionAllowedForDegree } from '@/modules/questions/questionRules'
+import type { MasonicDegree, MasonicRite, Question } from '@/modules/questions/types'
 
 interface LoadQuestionsOptions {
   force?: boolean
   fallbackToDefaults?: boolean
 }
 
-const STARTER_QUESTIONS = [...DEFAULT_QUESTIONS, ...LEGACY_STARTER_QUESTIONS]
+export const STARTER_QUESTIONS = [
+  ...REAA_LITURGICAL_QUESTIONS,
+  ...DEFAULT_QUESTIONS,
+  ...LEGACY_STARTER_QUESTIONS,
+]
 
 export const useQuestionsStore = defineStore('questions', () => {
   const questions = ref<Question[]>([])
@@ -22,16 +27,14 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const questionsByCategory = computed(() => {
     const grouped: Record<string, Question[]> = {}
-    questions.value.forEach((q) => {
-      if (!grouped[q.category]) grouped[q.category] = []
-      grouped[q.category].push(q)
+    questions.value.forEach((question) => {
+      if (!grouped[question.category]) grouped[question.category] = []
+      grouped[question.category].push(question)
     })
     return grouped
   })
 
-  const categories = computed(() => {
-    return Array.from(new Set(questions.value.map((q) => q.category))).sort()
-  })
+  const categories = computed(() => Array.from(new Set(questions.value.map((q) => q.category))).sort())
 
   const useDefaults = () => {
     questions.value = STARTER_QUESTIONS.map((question) => ({ ...question }))
@@ -72,27 +75,28 @@ export const useQuestionsStore = defineStore('questions', () => {
     }
   }
 
-  const getEligibleQuestions = (category: string, degree: MasonicDegree): Question[] => {
+  const getEligibleQuestions = (
+    category: string,
+    degree: MasonicDegree,
+    rite: MasonicRite = 'reaa',
+  ): Question[] => {
     return questions.value.filter(
       (question) =>
         question.category === category &&
+        getQuestionRite(question) === rite &&
         isQuestionAllowedForDegree(question.difficulty, degree),
     )
   }
 
-  const setQuestions = (newQuestions: Question[]) => {
-    questions.value = newQuestions
-  }
+  const countForRite = (rite: MasonicRite) =>
+    questions.value.filter((question) => getQuestionRite(question) === rite).length
 
-  const addQuestion = (question: Question) => {
-    questions.value.push(question)
-  }
-
+  const setQuestions = (newQuestions: Question[]) => { questions.value = newQuestions }
+  const addQuestion = (question: Question) => { questions.value.push(question) }
   const updateQuestion = (id: string, updated: Partial<Question>) => {
     const index = questions.value.findIndex((q) => q.id === id)
     if (index !== -1) questions.value[index] = { ...questions.value[index], ...updated }
   }
-
   const deleteQuestion = (id: string) => {
     questions.value = questions.value.filter((q) => q.id !== id)
   }
@@ -107,6 +111,7 @@ export const useQuestionsStore = defineStore('questions', () => {
     categories,
     loadQuestions,
     getEligibleQuestions,
+    countForRite,
     setQuestions,
     addQuestion,
     updateQuestion,
