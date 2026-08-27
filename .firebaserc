@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "registrologia"
+  },
+  "targets": {
+    "registrologia": {
+      "hosting": {
+        "juego-masonico": [
+          "entre-la-escuadra-y-el-compas"
+        ]
+      }
+    }
+  }
+}
