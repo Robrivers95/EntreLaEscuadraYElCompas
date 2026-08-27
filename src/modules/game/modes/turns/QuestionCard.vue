@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { DEGREE_LABELS, getQuestionPoints, getQuestionRite, isDirectAnswerCorrect, RITE_SHORT_LABELS } from '@/modules/questions/questionRules'
+import { DIFFICULTY_LABELS, getQuestionPoints, getQuestionRite, isDirectAnswerCorrect, RITE_SHORT_LABELS } from '@/modules/questions/questionRules'
 import type { AnswerMode, Question } from '@/modules/questions/types'
 
 interface Props { question: Question }
@@ -64,7 +64,7 @@ const resolved = ref(false)
 const lastResultCorrect = ref(false)
 const pendingResolution = ref<Resolution | null>(null)
 
-const difficultyLabel = computed(() => DEGREE_LABELS[props.question.difficulty])
+const difficultyLabel = computed(() => DIFFICULTY_LABELS[props.question.difficulty])
 const riteLabel = computed(() => RITE_SHORT_LABELS[getQuestionRite(props.question)])
 const normalPoints = computed(() => getQuestionPoints(props.question, 'multiple-choice'))
 const directPoints = computed(() => getQuestionPoints(props.question, 'direct'))
@@ -110,7 +110,7 @@ const finishQuestion = () => {
 
 <style scoped>
 .question-card{background:radial-gradient(circle at 50% 0%,rgba(201,168,76,.13),rgba(26,10,0,.94) 58%);border:2px solid #c9a84c;border-radius:16px;padding:25px;max-width:560px;margin:20px auto;box-shadow:0 20px 55px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.04)}
-.question-header{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}.rite-badge,.difficulty-badge,.category-badge{padding:6px 11px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase}.rite-badge{background:#c9a84c;color:#1a0a00}.difficulty-badge{color:white}.difficulty-badge.aprendiz{background:rgba(76,175,80,.82)}.difficulty-badge.compañero{background:rgba(230,165,20,.85)}.difficulty-badge.maestro{background:rgba(190,65,58,.86)}.category-badge{background:rgba(139,105,20,.5);color:#f0e6c8;border:1px solid #8b6914}
+.question-header{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}.rite-badge,.difficulty-badge,.category-badge{padding:6px 11px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase}.rite-badge{background:#c9a84c;color:#1a0a00}.difficulty-badge{color:white}.difficulty-badge.aprendiz{background:rgba(76,175,80,.82)}.difficulty-badge.compañero{background:rgba(230,165,20,.85)}.difficulty-badge.maestro{background:rgba(190,65,58,.86)}.difficulty-badge.general{background:rgba(55,139,168,.86)}.category-badge{background:rgba(139,105,20,.5);color:#f0e6c8;border:1px solid #8b6914}
 .question-content h3{color:#f0e6c8;margin:0 0 22px;font-size:21px;line-height:1.45}.direct-mode{display:grid;gap:13px}.bonus-banner{display:flex;flex-direction:column;gap:3px;padding:13px 15px;border:1px solid rgba(201,168,76,.55);border-radius:10px;background:rgba(201,168,76,.08)}.bonus-banner strong{color:#e7ca77}.bonus-banner span{color:rgba(240,230,200,.7);font-size:12px}.direct-input-row{display:grid;grid-template-columns:1fr auto;gap:8px}.direct-input{min-width:0;padding:12px;background:rgba(0,0,0,.2);border:1px solid #8b6914;border-radius:8px;color:#f0e6c8}
 .btn-direct,.btn-show-options,.btn-submit,.btn-skip,.btn-next{border-radius:8px;font-weight:800;cursor:pointer;transition:.2s ease}.btn-direct{border:none;padding:11px 14px;background:linear-gradient(135deg,#e0c16c,#8b6914);color:#1a0a00}.btn-show-options{padding:11px;border:1px solid #8b6914;background:rgba(201,168,76,.08);color:#f0e6c8}.btn-direct:hover:not(:disabled),.btn-submit:hover:not(:disabled),.btn-next:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(201,168,76,.2)}button:disabled{opacity:.45;cursor:not-allowed}
 .attempt-message{margin-bottom:12px;padding:10px 12px;border-left:3px solid #d59a3a;background:rgba(213,154,58,.09);color:#f0d4a6;font-size:13px}.options-container{display:flex;flex-direction:column;gap:10px}.option-button{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;background:rgba(139,105,20,.18);border:1px solid #8b6914;border-radius:10px;padding:12px;color:#f0e6c8;text-align:left;cursor:pointer;transition:.18s ease}.option-button:hover{transform:translateX(3px);border-color:#c9a84c;background:rgba(201,168,76,.12)}.option-button.selected{border-color:#e2c86e;background:rgba(201,168,76,.22);box-shadow:0 0 0 2px rgba(201,168,76,.08)}.option-letter{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.24);color:#e2c86e;font-weight:900}.btn-submit{margin-top:4px;padding:12px;border:none;background:linear-gradient(135deg,#d6b75f,#8b6914);color:#1a0a00}
