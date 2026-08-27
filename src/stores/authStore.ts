@@ -24,9 +24,20 @@ export interface MiLogiaProfile {
   lodgeRole?: string
 }
 
+const PROFILE_CACHE = 'masonic-game-milogia-profile'
+const readCachedProfile = (): MiLogiaProfile | null => {
+  if (typeof window === 'undefined') return null
+  try { return JSON.parse(window.localStorage.getItem(PROFILE_CACHE) || 'null') as MiLogiaProfile | null } catch { return null }
+}
+const cacheProfile = (profile: MiLogiaProfile | null) => {
+  if (typeof window === 'undefined') return
+  if (profile) window.localStorage.setItem(PROFILE_CACHE, JSON.stringify(profile))
+  else window.localStorage.removeItem(PROFILE_CACHE)
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<FirebaseUser | null>(null)
-  const profile = ref<MiLogiaProfile | null>(null)
+  const profile = ref<MiLogiaProfile | null>(readCachedProfile())
   const loading = ref(true)
   const error = ref<string | null>(null)
 
@@ -49,6 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     profile.value = { uid, ...snapshot.data() } as MiLogiaProfile
+    cacheProfile(profile.value)
     return profile.value
   }
 
@@ -59,11 +71,12 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = null
       try {
         if (user) await loadMiLogiaProfile(user.uid)
-        else profile.value = null
+        else { profile.value = null; cacheProfile(null) }
       } catch (err) {
-        console.error('Error loading Mi Logia profile:', err)
-        profile.value = null
-        error.value = 'No se pudo validar tu perfil de Registro Logia.'
+        console.warn('No se pudo consultar Registro Logia; intentando perfil local para modo offline.', err)
+        const cached = readCachedProfile()
+        profile.value = cached?.uid === user?.uid ? cached : null
+        if (!profile.value) error.value = 'No se pudo validar tu perfil de Registro Logia.'
       } finally {
         loading.value = false
       }
@@ -123,6 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
       await signOut(auth)
       currentUser.value = null
       profile.value = null
+      cacheProfile(null)
     } catch (err) {
       const authError = err as AuthError
       error.value = authError.message
