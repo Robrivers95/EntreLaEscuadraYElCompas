@@ -1,4 +1,4 @@
-import type { AnswerMode, MasonicDegree, Question } from './types'
+import type { AnswerMode, MasonicDegree, MasonicRite, Question } from './types'
 
 export const MASONIC_CATEGORIES = [
   'Historia',
@@ -12,6 +12,22 @@ export const MASONIC_CATEGORIES = [
   'Ceremonial',
 ] as const
 
+export const MASONIC_RITES: Array<{ value: MasonicRite; label: string; shortLabel: string }> = [
+  { value: 'reaa', label: 'Rito Escocés Antiguo y Aceptado', shortLabel: 'REAA' },
+  { value: 'york', label: 'Rito de York', shortLabel: 'York' },
+  { value: 'frances', label: 'Rito Francés', shortLabel: 'Francés' },
+  { value: 'nacional-mexicano', label: 'Rito Nacional Mexicano', shortLabel: 'RNM' },
+  { value: 'otro', label: 'Otro rito', shortLabel: 'Otro' },
+]
+
+export const RITE_LABELS = Object.fromEntries(
+  MASONIC_RITES.map((rite) => [rite.value, rite.label]),
+) as Record<MasonicRite, string>
+
+export const RITE_SHORT_LABELS = Object.fromEntries(
+  MASONIC_RITES.map((rite) => [rite.value, rite.shortLabel]),
+) as Record<MasonicRite, string>
+
 export const DEGREE_LABELS: Record<MasonicDegree, string> = {
   aprendiz: 'Aprendiz',
   compañero: 'Compañero',
@@ -20,6 +36,18 @@ export const DEGREE_LABELS: Record<MasonicDegree, string> = {
 
 const DEGREE_ORDER: MasonicDegree[] = ['aprendiz', 'compañero', 'maestro']
 
+export function normalizeMiLogiaDegree(value?: string | null): MasonicDegree | null {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'aprendiz') return 'aprendiz'
+  if (normalized === 'companero' || normalized === 'compañero') return 'compañero'
+  if (normalized === 'maestro') return 'maestro'
+  return null
+}
+
+export function getQuestionRite(question: Question): MasonicRite {
+  return question.rite ?? 'reaa'
+}
+
 export function getAllowedDifficulties(degree: MasonicDegree): MasonicDegree[] {
   const maxIndex = DEGREE_ORDER.indexOf(degree)
   return DEGREE_ORDER.slice(0, maxIndex + 1)
@@ -27,9 +55,9 @@ export function getAllowedDifficulties(degree: MasonicDegree): MasonicDegree[] {
 
 export function isQuestionAllowedForDegree(
   questionDifficulty: MasonicDegree,
-  gameDegree: MasonicDegree,
+  playerDegree: MasonicDegree,
 ): boolean {
-  return getAllowedDifficulties(gameDegree).includes(questionDifficulty)
+  return getAllowedDifficulties(playerDegree).includes(questionDifficulty)
 }
 
 export function getBasePoints(difficulty: MasonicDegree): number {
