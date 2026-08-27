@@ -1,7 +1,13 @@
 <template>
   <div class="admin-panel">
     <div class="panel-header">
-      <h1>⚒ Panel de Administración - Preguntas</h1>
+      <div>
+        <h1>⚒ Banco de preguntas</h1>
+        <p>Administra las preguntas que alimentan las categorías del tablero.</p>
+      </div>
+      <button class="btn-seed" :disabled="seeding" @click="importStarterQuestions">
+        {{ seeding ? 'Agregando…' : '＋ Agregar preguntas iniciales' }}
+      </button>
     </div>
 
     <QuestionForm
@@ -12,37 +18,41 @@
 
     <div class="questions-list">
       <div class="list-controls">
-        <div class="filter-group">
-          <label for="category-filter">Filtrar por Categoría:</label>
-          <select v-model="filterCategory" id="category-filter" class="filter-select">
-            <option value="">Todas</option>
-            <option v-for="cat in categories" :key="cat" :value="cat">
-              {{ cat }}
-            </option>
-          </select>
+        <div class="search-group">
+          <input v-model="searchText" class="filter-input" placeholder="Buscar pregunta o respuesta…" />
         </div>
-
-        <div class="filter-group">
-          <label for="difficulty-filter">Filtrar por Dificultad:</label>
-          <select v-model="filterDifficulty" id="difficulty-filter" class="filter-select">
-            <option value="">Todas</option>
-            <option value="aprendiz">Aprendiz (Fácil)</option>
-            <option value="compañero">Compañero (Medio)</option>
-            <option value="maestro">Maestro (Difícil)</option>
-          </select>
-        </div>
+        <select v-model="filterCategory" class="filter-select">
+          <option value="">Todas las categorías</option>
+          <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
+        </select>
+        <select v-model="filterDifficulty" class="filter-select">
+          <option value="">Todos los grados</option>
+          <option value="aprendiz">Aprendiz</option>
+          <option value="compañero">Compañero</option>
+          <option value="maestro">Maestro</option>
+        </select>
+        <button class="btn-refresh" :disabled="questionsStore.loading" @click="reloadQuestions">↻ Recargar</button>
       </div>
 
-      <div v-if="filteredQuestions.length === 0" class="no-questions">
-        <p>No hay preguntas. ¡Crea una nueva!</p>
+      <div class="summary-row">
+        <span><strong>{{ filteredQuestions.length }}</strong> visibles</span>
+        <span>Aprendiz: <strong>{{ countByDegree('aprendiz') }}</strong></span>
+        <span>Compañero: <strong>{{ countByDegree('compañero') }}</strong></span>
+        <span>Maestro: <strong>{{ countByDegree('maestro') }}</strong></span>
+      </div>
+
+      <div v-if="questionsStore.error" class="status-message error">{{ questionsStore.error }}</div>
+      <div v-if="questionsStore.loading" class="status-message">Cargando banco de preguntas…</div>
+
+      <div v-else-if="filteredQuestions.length === 0" class="no-questions">
+        <h3>No hay preguntas con estos filtros</h3>
+        <p>Puedes crear una arriba o cargar el banco inicial preparado para el juego.</p>
       </div>
 
       <div v-else class="questions-grid">
-        <div v-for="question in filteredQuestions" :key="question.id" class="question-card">
+        <article v-for="question in filteredQuestions" :key="question.id" class="question-card">
           <div class="question-header">
-            <span class="difficulty-badge" :class="question.difficulty">
-              {{ difficultyLabel(question.difficulty) }}
-            </span>
+            <span class="difficulty-badge" :class="question.difficulty">{{ difficultyLabel(question.difficulty) }}</span>
             <span class="category-badge">{{ question.category }}</span>
           </div>
 
@@ -55,269 +65,174 @@
               class="option"
               :class="{ correct: index === question.correctAnswer }"
             >
-              {{ index + 1 }}. {{ option }}
+              <strong>{{ String.fromCharCode(65 + index) }}.</strong> {{ option }}
             </div>
           </div>
 
-          <div class="question-actions">
-            <button @click="editingQuestion = question" class="btn-edit">✏️ Editar</button>
-            <button @click="deleteQuestion(question.id)" class="btn-delete">🗑️ Eliminar</button>
+          <div class="direct-answer-preview">
+            <span>Sin incisos:</span>
+            <strong>{{ question.directAnswer || question.options[question.correctAnswer] }}</strong>
           </div>
-        </div>
+
+          <p v-if="question.explanation" class="explanation">{{ question.explanation }}</p>
+
+          <div class="question-actions">
+            <button class="btn-edit" @click="startEdit(question)">✏️ Editar</button>
+            <button class="btn-duplicate" @click="duplicateQuestion(question)">⧉ Duplicar</button>
+            <button class="btn-delete" @click="deleteQuestion(question.id)">🗑️ Eliminar</button>
+          </div>
+        </article>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import QuestionForm from './QuestionForm.vue'
 import { useQuestionsStore } from '@/stores/questionsStore'
 import { questionsService } from '@/modules/questions/questionsService'
-import type { Question } from '@/modules/questions/types'
+import { DEFAULT_QUESTIONS } from '@/modules/questions/defaultQuestions'
+import { DEGREE_LABELS, MASONIC_CATEGORIES, normalizeAnswer } from '@/modules/questions/questionRules'
+import type { MasonicDegree, Question } from '@/modules/questions/types'
+
+type QuestionInput = Omit<Question, 'id' | 'createdAt' | 'updatedAt'>
 
 const questionsStore = useQuestionsStore()
 const editingQuestion = ref<Question | null>(null)
 const filterCategory = ref('')
 const filterDifficulty = ref('')
+const searchText = ref('')
+const seeding = ref(false)
+const categories = MASONIC_CATEGORIES
 
-const categories = computed(() => questionsStore.categories)
+onMounted(() => reloadQuestions())
+
+const reloadQuestions = async () => {
+  await questionsStore.loadQuestions({ force: true, fallbackToDefaults: false })
+}
 
 const filteredQuestions = computed(() => {
-  return questionsStore.questions.filter((q) => {
-    const matchCategory = !filterCategory.value || q.category === filterCategory.value
-    const matchDifficulty = !filterDifficulty.value || q.difficulty === filterDifficulty.value
-    return matchCategory && matchDifficulty
+  const search = normalizeAnswer(searchText.value)
+  return questionsStore.questions.filter((question) => {
+    const matchCategory = !filterCategory.value || question.category === filterCategory.value
+    const matchDifficulty = !filterDifficulty.value || question.difficulty === filterDifficulty.value
+    const haystack = normalizeAnswer([
+      question.text,
+      ...question.options,
+      question.directAnswer ?? '',
+      ...(question.acceptedDirectAnswers ?? []),
+    ].join(' '))
+    const matchSearch = !search || haystack.includes(search)
+    return matchCategory && matchDifficulty && matchSearch
   })
 })
 
-const difficultyLabel = (difficulty: string): string => {
-  const labels: Record<string, string> = {
-    aprendiz: 'Aprendiz',
-    compañero: 'Compañero',
-    maestro: 'Maestro',
-  }
-  return labels[difficulty] || difficulty
+const difficultyLabel = (difficulty: MasonicDegree) => DEGREE_LABELS[difficulty]
+const countByDegree = (degree: MasonicDegree) => questionsStore.questions.filter((q) => q.difficulty === degree).length
+
+const startEdit = (question: Question) => {
+  editingQuestion.value = question
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-const handleSubmitQuestion = async (question: Omit<Question, 'id' | 'createdAt'>) => {
+const handleSubmitQuestion = async (question: QuestionInput) => {
   try {
     if (editingQuestion.value) {
       await questionsService.updateQuestion(editingQuestion.value.id, question)
       questionsStore.updateQuestion(editingQuestion.value.id, question)
     } else {
       const id = await questionsService.addQuestion(question)
-      questionsStore.addQuestion({
-        ...question,
-        id,
-      })
+      questionsStore.addQuestion({ ...question, id })
     }
     editingQuestion.value = null
   } catch (err) {
     console.error('Error saving question:', err)
-    alert('Error al guardar la pregunta')
+    alert('No se pudo guardar la pregunta.')
+  }
+}
+
+const duplicateQuestion = async (question: Question) => {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...copy } = question
+  try {
+    const newId = await questionsService.addQuestion({ ...copy, text: `${copy.text} (copia)` })
+    questionsStore.addQuestion({ ...copy, text: `${copy.text} (copia)`, id: newId })
+  } catch (err) {
+    console.error('Error duplicating question:', err)
+    alert('No se pudo duplicar la pregunta.')
+  }
+}
+
+const importStarterQuestions = async () => {
+  seeding.value = true
+  try {
+    const existing = new Set(questionsStore.questions.map((question) => normalizeAnswer(question.text)))
+    const missing = DEFAULT_QUESTIONS.filter((question) => !existing.has(normalizeAnswer(question.text)))
+
+    for (const question of missing) {
+      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = question
+      await questionsService.addQuestion(payload)
+    }
+
+    await reloadQuestions()
+    alert(missing.length ? `Se agregaron ${missing.length} preguntas iniciales.` : 'El banco inicial ya estaba cargado.')
+  } catch (err) {
+    console.error('Error importing starter questions:', err)
+    alert('No se pudo cargar el banco inicial en Firebase.')
+  } finally {
+    seeding.value = false
   }
 }
 
 const deleteQuestion = async (id: string) => {
-  if (confirm('¿Estás seguro de que quieres eliminar esta pregunta?')) {
-    try {
-      await questionsService.deleteQuestion(id)
-      questionsStore.deleteQuestion(id)
-    } catch (err) {
-      console.error('Error deleting question:', err)
-      alert('Error al eliminar la pregunta')
-    }
+  if (!confirm('¿Eliminar esta pregunta del banco?')) return
+  try {
+    await questionsService.deleteQuestion(id)
+    questionsStore.deleteQuestion(id)
+    if (editingQuestion.value?.id === id) editingQuestion.value = null
+  } catch (err) {
+    console.error('Error deleting question:', err)
+    alert('No se pudo eliminar la pregunta.')
   }
 }
 </script>
 
 <style scoped>
-.admin-panel {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.panel-header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.panel-header h1 {
-  color: #c9a84c;
-  font-size: 28px;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-}
-
-.questions-list {
-  margin-top: 30px;
-}
-
-.list-controls {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.filter-group label {
-  color: #f0e6c8;
-  font-weight: 500;
-}
-
-.filter-select {
-  padding: 8px 12px;
-  background: rgba(201, 168, 76, 0.1);
-  border: 1px solid #8b6914;
-  border-radius: 5px;
-  color: #f0e6c8;
-  cursor: pointer;
-}
-
-.filter-select:focus {
-  outline: none;
-  border-color: #c9a84c;
-}
-
-.no-questions {
-  text-align: center;
-  padding: 40px 20px;
-  color: #8b6914;
-  font-size: 18px;
-}
-
-.questions-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
-}
-
-.question-card {
-  background: rgba(201, 168, 76, 0.05);
-  border: 2px solid #8b6914;
-  border-radius: 8px;
-  padding: 15px;
-  transition: all 0.3s ease;
-}
-
-.question-card:hover {
-  border-color: #c9a84c;
-  box-shadow: 0 0 15px rgba(201, 168, 76, 0.2);
-}
-
-.question-header {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-
-.difficulty-badge,
-.category-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.category-badge {
-  background: rgba(139, 105, 20, 0.3);
-  color: #f0e6c8;
-  border: 1px solid #8b6914;
-}
-
-.difficulty-badge {
-  color: white;
-  border: none;
-}
-
-.difficulty-badge.aprendiz {
-  background: rgba(76, 175, 80, 0.7);
-}
-
-.difficulty-badge.compañero {
-  background: rgba(255, 193, 7, 0.7);
-}
-
-.difficulty-badge.maestro {
-  background: rgba(244, 67, 54, 0.7);
-}
-
-.question-text {
-  color: #f0e6c8;
-  margin: 10px 0;
-  font-weight: 500;
-}
-
-.question-options {
-  background: rgba(26, 10, 0, 0.5);
-  border-left: 3px solid #c9a84c;
-  padding: 10px;
-  margin: 10px 0;
-  border-radius: 4px;
-}
-
-.option {
-  color: #f0e6c8;
-  padding: 5px 0;
-  font-size: 13px;
-}
-
-.option.correct {
-  color: #4cb050;
-  font-weight: bold;
-}
-
-.question-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-.btn-edit,
-.btn-delete {
-  flex: 1;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 12px;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.btn-edit {
-  background: rgba(201, 168, 76, 0.3);
-  color: #f0e6c8;
-  border: 1px solid #c9a84c;
-}
-
-.btn-edit:hover {
-  background: #c9a84c;
-  color: #1a0a00;
-}
-
-.btn-delete {
-  background: rgba(244, 67, 54, 0.3);
-  color: #ff6b6b;
-  border: 1px solid #ff6b6b;
-}
-
-.btn-delete:hover {
-  background: #ff6b6b;
-  color: white;
-}
+.admin-panel { max-width: 1250px; margin: 0 auto; padding: 20px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 24px; }
+.panel-header h1 { color: #c9a84c; font-size: 30px; margin: 0; text-transform: uppercase; letter-spacing: 2px; }
+.panel-header p { margin: 6px 0 0; color: rgba(240, 230, 200, 0.7); }
+.btn-seed, .btn-refresh { border: 1px solid #c9a84c; background: rgba(201,168,76,.12); color: #f0e6c8; border-radius: 8px; padding: 11px 14px; font-weight: 700; cursor: pointer; }
+.btn-seed:hover, .btn-refresh:hover { background: rgba(201,168,76,.22); }
+.questions-list { margin-top: 28px; }
+.list-controls { display: grid; grid-template-columns: minmax(240px, 1fr) auto auto auto; gap: 10px; margin-bottom: 12px; }
+.filter-input, .filter-select { width: 100%; padding: 10px 12px; background: rgba(201,168,76,.08); border: 1px solid #8b6914; border-radius: 7px; color: #f0e6c8; }
+.summary-row { display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 0 18px; color: rgba(240,230,200,.72); font-size: 13px; }
+.summary-row strong { color: #c9a84c; }
+.status-message, .no-questions { text-align: center; padding: 35px 20px; color: #c9a84c; border: 1px dashed #8b6914; border-radius: 10px; }
+.status-message.error { color: #ff8b8b; border-color: #8f4343; }
+.no-questions h3 { margin: 0 0 8px; }
+.questions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.question-card { background: linear-gradient(145deg, rgba(201,168,76,.07), rgba(26,10,0,.75)); border: 1px solid #8b6914; border-radius: 12px; padding: 16px; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.question-card:hover { transform: translateY(-3px); border-color: #c9a84c; box-shadow: 0 12px 30px rgba(0,0,0,.25); }
+.question-header { display: flex; gap: 8px; margin-bottom: 12px; }
+.difficulty-badge, .category-badge { padding: 5px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.category-badge { background: rgba(139,105,20,.3); color: #f0e6c8; border: 1px solid #8b6914; }
+.difficulty-badge { color: white; }
+.difficulty-badge.aprendiz { background: rgba(76,175,80,.72); }
+.difficulty-badge.compañero { background: rgba(230,165,20,.8); }
+.difficulty-badge.maestro { background: rgba(190,65,58,.82); }
+.question-text { color: #f0e6c8; font-weight: 650; line-height: 1.45; }
+.question-options { background: rgba(0,0,0,.2); border-left: 3px solid #c9a84c; padding: 9px 11px; border-radius: 5px; }
+.option { color: rgba(240,230,200,.82); padding: 4px 0; font-size: 13px; }
+.option.correct { color: #8be19b; font-weight: 700; }
+.direct-answer-preview { display: flex; gap: 7px; margin-top: 10px; font-size: 12px; color: rgba(240,230,200,.65); }
+.direct-answer-preview strong { color: #c9a84c; }
+.explanation { color: rgba(240,230,200,.65); font-size: 12px; font-style: italic; }
+.question-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; margin-top: 14px; }
+.question-actions button { padding: 9px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px; }
+.btn-edit { background: rgba(201,168,76,.22); color: #f0e6c8; border: 1px solid #c9a84c; }
+.btn-duplicate { background: rgba(75,123,170,.18); color: #b8d9ff; border: 1px solid #557da4; }
+.btn-delete { background: rgba(244,67,54,.15); color: #ff8b8b; border: 1px solid #b55252; }
+@media (max-width: 850px) { .panel-header { align-items: stretch; flex-direction: column; } .list-controls { grid-template-columns: 1fr; } }
 </style>
