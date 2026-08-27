@@ -1,104 +1,93 @@
 # Build y despliegue seguro
 
-Este juego usa Auth/Firestore del proyecto Firebase `registrologia`, pero **NO** debe desplegarse sobre el Hosting principal de Registro Logia.
+El juego usa Auth/Firestore del proyecto Firebase `registrologia`, pero el frontend puede publicarse en un Hosting separado sin reemplazar `registrologia.web.app`.
 
-Sitio separado del juego:
+## Hosting actual de pruebas
 
-- Firebase project: `registrologia`
+- Firebase data project: `registrologia`
 - Hosting target: `juego-masonico`
 - Hosting site id: `entre-la-escuadra-y-el-compas`
-- URL prevista: `https://entre-la-escuadra-y-el-compas.web.app`
+- URL: `https://entre-la-escuadra-y-el-compas.web.app`
 
-## 1. Obtener la rama del juego
+## Hosting original del juego
 
-```powershell
+Para conservar la URL histórica `https://juegodemesamasonico.web.app`, la rama incluye `firebase.juegodemesamasonico.json`.
+
+El frontend sigue compilándose con las variables `VITE_FIREBASE_*` de Registro Logia; el proyecto de Hosting puede ser `juegodemesamasonico` sin cambiar el backend de Auth/Firestore.
+
+Desde Codespaces/Bash:
+
+```bash
+cd /workspaces/EntreLaEscuadraYElCompas
+git checkout chatgpt/gameplay-question-system-v2
+git pull origin chatgpt/gameplay-question-system-v2
+npm ci
+npm run build
+firebase deploy --only hosting --project juegodemesamasonico --config firebase.juegodemesamasonico.json
+```
+
+La ruta histórica `/lobby?mode=turns` está soportada y redirige al modo por turnos actual. `/lobby?mode=realtime` redirige al modo en tiempo real.
+
+## Obtener la rama del juego
+
+```bash
 git clone -b chatgpt/gameplay-question-system-v2 https://github.com/Robrivers95/EntreLaEscuadraYElCompas.git
 cd EntreLaEscuadraYElCompas
 ```
 
 Si ya tienes el repositorio:
 
-```powershell
+```bash
 git fetch origin
 git checkout chatgpt/gameplay-question-system-v2
 git pull origin chatgpt/gameplay-question-system-v2
 ```
 
-## 2. Instalar y compilar
+## Instalar y compilar
 
-```powershell
+```bash
 npm ci
 npm run build
 ```
 
 El build debe crear `dist/`.
 
-## 3. Instalar Firebase CLI e iniciar sesión
+## Configuración Firebase de datos
 
-```powershell
-npm install -g firebase-tools
+El juego debe compilarse con las variables de Registro Logia, por ejemplo en `.env.local`:
+
+```text
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=registrologia.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=registrologia
+VITE_FIREBASE_STORAGE_BUCKET=registrologia.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_DATABASE_URL=...
+VITE_AGORA_APP_ID=...
+```
+
+`VITE_FIREBASE_DATABASE_URL` y `VITE_AGORA_APP_ID` son necesarios para validar completamente tiempo real/voz.
+
+## Desplegar al sitio de pruebas separado
+
+```bash
 firebase login
 firebase use registrologia
-```
-
-## 4. Crear el sitio de Hosting separado (sólo la primera vez)
-
-Primero consulta si existe:
-
-```powershell
-firebase hosting:sites:get entre-la-escuadra-y-el-compas --project registrologia
-```
-
-Si Firebase responde que no existe:
-
-```powershell
-firebase hosting:sites:create entre-la-escuadra-y-el-compas --project registrologia
-```
-
-La rama ya contiene `.firebaserc` con el target `juego-masonico`, pero puede reafirmarse con:
-
-```powershell
-firebase target:apply hosting juego-masonico entre-la-escuadra-y-el-compas --project registrologia
-```
-
-## 5. Desplegar exclusivamente el juego
-
-```powershell
 firebase deploy --only hosting:juego-masonico --project registrologia
 ```
 
-No uses `firebase deploy` sin `--only hosting:juego-masonico` desde este repositorio.
+No uses `firebase deploy` sin limitar el target desde este repositorio si no quieres tocar otros recursos.
 
-## 6. Publicar las reglas de Firestore del banco de preguntas
+## Banco de preguntas y Firestore
 
-La regla `/questions` se mantiene en el repositorio `MiLogiaApp`, que es la fuente de verdad para reglas de Registro Logia.
+La regla `/questions` vive en `MiLogiaApp/firestore.rules` y ya está preparada para lectura de usuarios autenticados y escritura de `admin`/`master`.
 
-Desde una copia actualizada de `MiLogiaApp`:
+Para publicar reglas desde una copia actualizada de `MiLogiaApp`:
 
-```powershell
+```bash
 git pull origin main
 firebase deploy --only firestore --project registrologia
 ```
 
-Esto publica sólo reglas/índices de Firestore; no despliega el Hosting de Registro Logia.
-
-## 7. Agora / voz
-
-El build no requiere `VITE_AGORA_APP_ID`, pero el audio en tiempo real sí lo necesita al ejecutarse. Si ya tienes el App ID de Agora, crea `.env.local` en la raíz:
-
-```text
-VITE_AGORA_APP_ID=TU_AGORA_APP_ID
-```
-
-Si la Realtime Database de Registro Logia usa una URL distinta a la predeterminada, también puede definirse:
-
-```text
-VITE_FIREBASE_DATABASE_URL=https://TU-INSTANCIA.firebaseio.com
-```
-
-Después vuelve a ejecutar:
-
-```powershell
-npm run build
-firebase deploy --only hosting:juego-masonico --project registrologia
-```
+El código incluye 54 preguntas REAA específicas (18 Aprendiz, 18 Compañero y 18 Maestro). En Administración, el botón **Importar bancos iniciales** sincroniza las preguntas incluidas con la colección Firestore `questions`. Si todavía no se han importado, el modo de juego puede usar el banco incluido como fallback, pero el listado remoto de Administración no las mostrará hasta sincronizarlas.
