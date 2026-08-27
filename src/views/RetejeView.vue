@@ -14,7 +14,7 @@
         <div class="result-score">{{ score }}/{{ exam.length }}</div>
         <h2>{{ passed ? 'Acceso aprobado' : 'No aprobaste el reteje del juego' }}</h2>
         <p v-if="passed">Tu acceso a {{ riteLabel }} quedó registrado para el nivel {{ levelLabel }}.</p>
-        <p v-else>No puedes entrar a esa sala todavía. Puedes volver al lobby o intentar nuevamente.</p>
+        <p v-else>No puedes entrar a esa sala o banco todavía. Puedes volver al lobby o intentar nuevamente.</p>
         <div class="result-actions">
           <button v-if="!passed" class="btn-primary" @click="restart">Intentar de nuevo</button>
           <button class="btn-secondary" @click="router.push('/lobby')">Volver al lobby</button>
@@ -52,9 +52,11 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAccessStore } from '@/stores/accessStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { RITE_EXAMS } from '@/modules/game/access/riteAccess'
-import type { RoomLevel } from '@/modules/game/access/riteAccess'
+import type { RiteExamQuestion, RoomLevel } from '@/modules/game/access/riteAccess'
 import { RITE_LABELS } from '@/modules/questions/questionRules'
 import type { MasonicRite } from '@/modules/questions/types'
+
+type ExamRite = Exclude<MasonicRite, 'libre' | 'otro'>
 
 const route = useRoute()
 const router = useRouter()
@@ -62,11 +64,11 @@ const authStore = useAuthStore()
 const accessStore = useAccessStore()
 const roomStore = useRoomStore()
 
-const rite = computed(() => (route.query.rite as MasonicRite) || 'reaa')
+const rite = computed<MasonicRite>(() => (route.query.rite as MasonicRite) || 'reaa')
 const level = computed<RoomLevel>(() => (route.query.level as RoomLevel) || 'aprendiz')
 const riteLabel = computed(() => RITE_LABELS[rite.value] || 'Rito')
 const levelLabel = computed(() => level.value === 'general' ? 'General' : level.value[0].toUpperCase() + level.value.slice(1))
-const exam = ref<Array<(typeof RITE_EXAMS)['reaa'][number]>>([])
+const exam = ref<RiteExamQuestion[]>([])
 const answers = ref<Array<number | null>>([])
 const finished = ref(false)
 const score = ref(0)
@@ -80,7 +82,7 @@ const loadExam = () => {
     router.replace('/lobby')
     return
   }
-  const bank = RITE_EXAMS[rite.value]
+  const bank = RITE_EXAMS[rite.value as ExamRite]
   exam.value = shuffle(bank).slice(0, 5)
   answers.value = exam.value.map(() => null)
 }
@@ -111,10 +113,16 @@ const submitExam = async () => {
         score: 0,
         joinedAt: Date.now(),
       })
-      window.setTimeout(() => router.push(`/game/turns?room=${roomId}`), 700)
+      window.setTimeout(() => router.push(`/game/turns?room=${roomId}`), 500)
+      return
     } catch (error) {
       console.error(error)
     }
+  }
+
+  const returnTo = route.query.returnTo as string | undefined
+  if (returnTo?.startsWith('/')) {
+    window.setTimeout(() => router.push(returnTo), 500)
   }
 }
 </script>
