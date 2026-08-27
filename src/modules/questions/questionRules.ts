@@ -1,4 +1,4 @@
-import type { AnswerMode, MasonicDegree, MasonicRite, Question } from './types'
+import type { AnswerMode, MasonicDegree, MasonicRite, Question, QuestionDifficulty } from './types'
 
 export const MASONIC_CATEGORIES = [
   'Historia',
@@ -12,12 +12,25 @@ export const MASONIC_CATEGORIES = [
   'Ceremonial',
 ] as const
 
-export const MASONIC_RITES: Array<{ value: MasonicRite; label: string; shortLabel: string }> = [
-  { value: 'reaa', label: 'Rito Escocés Antiguo y Aceptado', shortLabel: 'REAA' },
-  { value: 'york', label: 'Rito de York', shortLabel: 'York' },
-  { value: 'frances', label: 'Rito Francés', shortLabel: 'Francés' },
-  { value: 'nacional-mexicano', label: 'Rito Nacional Mexicano', shortLabel: 'RNM' },
-  { value: 'otro', label: 'Otro rito', shortLabel: 'Otro' },
+export const GENERAL_CATEGORIES = [
+  'Historia',
+  'Geografía',
+  'Ciencia',
+  'Cultura',
+  'Matemáticas',
+  'Lengua',
+  'Tecnología',
+  'Arte',
+  'Deportes',
+] as const
+
+export const MASONIC_RITES: Array<{ value: MasonicRite; label: string; shortLabel: string; masonic: boolean }> = [
+  { value: 'reaa', label: 'Rito Escocés Antiguo y Aceptado', shortLabel: 'REAA', masonic: true },
+  { value: 'york', label: 'Rito de York', shortLabel: 'York', masonic: true },
+  { value: 'frances', label: 'Rito Francés', shortLabel: 'Francés', masonic: true },
+  { value: 'nacional-mexicano', label: 'Rito Nacional Mexicano', shortLabel: 'RNM', masonic: true },
+  { value: 'libre', label: 'Modo Libre · Cultura general', shortLabel: 'Libre', masonic: false },
+  { value: 'otro', label: 'Otro rito / banco personalizado', shortLabel: 'Otro', masonic: true },
 ]
 
 export const RITE_LABELS = Object.fromEntries(
@@ -32,6 +45,11 @@ export const DEGREE_LABELS: Record<MasonicDegree, string> = {
   aprendiz: 'Aprendiz',
   compañero: 'Compañero',
   maestro: 'Maestro',
+}
+
+export const DIFFICULTY_LABELS: Record<QuestionDifficulty, string> = {
+  ...DEGREE_LABELS,
+  general: 'General',
 }
 
 const DEGREE_ORDER: MasonicDegree[] = ['aprendiz', 'compañero', 'maestro']
@@ -54,17 +72,19 @@ export function getAllowedDifficulties(degree: MasonicDegree): MasonicDegree[] {
 }
 
 export function isQuestionAllowedForDegree(
-  questionDifficulty: MasonicDegree,
+  questionDifficulty: QuestionDifficulty,
   playerDegree: MasonicDegree,
 ): boolean {
+  if (questionDifficulty === 'general') return true
   return getAllowedDifficulties(playerDegree).includes(questionDifficulty)
 }
 
-export function getBasePoints(difficulty: MasonicDegree): number {
-  const points: Record<MasonicDegree, number> = {
+export function getBasePoints(difficulty: QuestionDifficulty): number {
+  const points: Record<QuestionDifficulty, number> = {
     aprendiz: 10,
     compañero: 20,
     maestro: 30,
+    general: 10,
   }
   return points[difficulty]
 }
