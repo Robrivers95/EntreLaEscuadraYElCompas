@@ -18,7 +18,6 @@ onMounted(() => {
 <style scoped>
 .app {
   min-height: 100vh;
-  background-color: #1a0a00;
-  color: #f0e6c8;
+  color: var(--masonic-text);
 }
 </style>
