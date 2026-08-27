@@ -4,6 +4,7 @@ import { questionsService } from '@/modules/questions/questionsService'
 import { DEFAULT_QUESTIONS } from '@/modules/questions/defaultQuestions'
 import { LEGACY_STARTER_QUESTIONS } from '@/modules/questions/legacyStarterQuestions'
 import { REAA_LITURGICAL_QUESTIONS } from '@/modules/questions/reaaLiturgicalQuestions'
+import { REAA_NUEVO_LEON_QUESTIONS } from '@/modules/questions/reaaNuevoLeonQuestions'
 import { getQuestionRite, isQuestionAllowedForDegree } from '@/modules/questions/questionRules'
 import type { MasonicDegree, MasonicRite, Question } from '@/modules/questions/types'
 
@@ -14,6 +15,7 @@ interface LoadQuestionsOptions {
 
 export const STARTER_QUESTIONS = [
   ...REAA_LITURGICAL_QUESTIONS,
+  ...REAA_NUEVO_LEON_QUESTIONS,
   ...DEFAULT_QUESTIONS,
   ...LEGACY_STARTER_QUESTIONS,
 ]
@@ -79,14 +81,12 @@ export const useQuestionsStore = defineStore('questions', () => {
     category: string,
     degree: MasonicDegree,
     rite: MasonicRite = 'reaa',
-  ): Question[] => {
-    return questions.value.filter(
-      (question) =>
-        question.category === category &&
-        getQuestionRite(question) === rite &&
-        isQuestionAllowedForDegree(question.difficulty, degree),
-    )
-  }
+  ): Question[] => questions.value.filter(
+    (question) =>
+      question.category === category &&
+      getQuestionRite(question) === rite &&
+      isQuestionAllowedForDegree(question.difficulty, degree),
+  )
 
   const countForRite = (rite: MasonicRite) =>
     questions.value.filter((question) => getQuestionRite(question) === rite).length
@@ -97,9 +97,7 @@ export const useQuestionsStore = defineStore('questions', () => {
     const index = questions.value.findIndex((q) => q.id === id)
     if (index !== -1) questions.value[index] = { ...questions.value[index], ...updated }
   }
-  const deleteQuestion = (id: string) => {
-    questions.value = questions.value.filter((q) => q.id !== id)
-  }
+  const deleteQuestion = (id: string) => { questions.value = questions.value.filter((q) => q.id !== id) }
 
   return {
     questions,
