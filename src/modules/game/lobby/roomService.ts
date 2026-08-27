@@ -111,7 +111,8 @@ export const roomService = {
   },
 
   async patchRoom(roomId: string, patch: Partial<BoardRoom>): Promise<void> {
-    const { id: _id, ...safePatch } = patch
+    const safePatch: Partial<BoardRoom> = { ...patch }
+    delete safePatch.id
     await updateDoc(doc(db, 'gameRooms', roomId), { ...safePatch, updatedAt: Date.now() })
   },
 
