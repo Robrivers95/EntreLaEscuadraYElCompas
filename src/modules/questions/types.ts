@@ -1,4 +1,5 @@
 export type MasonicDegree = 'aprendiz' | 'compañero' | 'maestro'
+export type MasonicRite = 'reaa' | 'york' | 'frances' | 'nacional-mexicano' | 'otro'
 export type AnswerMode = 'direct' | 'multiple-choice'
 
 export interface Question {
@@ -6,14 +7,15 @@ export interface Question {
   text: string
   category: string
   difficulty: MasonicDegree
+  /** Rite this question belongs to. Missing values from the legacy bank are treated as REAA. */
+  rite?: MasonicRite
   options: string[]
   correctAnswer: number
-  /** Canonical answer used when the player tries to answer before seeing the options. */
   directAnswer?: string
-  /** Alternate phrasings accepted in direct-answer mode. */
   acceptedDirectAnswers?: string[]
   explanation?: string
-  /** Optional override. Defaults are defined by degree in questionRules.ts. */
+  /** Human-readable provenance note for administrators. */
+  source?: string
   basePoints?: number
   createdAt?: number
   updatedAt?: number
