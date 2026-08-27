@@ -1,0 +1,137 @@
+<template>
+  <main class="study-view">
+    <header class="page-head">
+      <button class="back" @click="router.push('/lobby')">← Lobby</button>
+      <div><span class="kicker">Modalidad III</span><h1>Estudio individual</h1><p>Practica a tu ritmo. Las preguntas incluidas en la app pueden funcionar sin conexión una vez instalada.</p></div>
+      <div class="offline"><span>◉</span><small>Banco local incluido</small></div>
+    </header>
+
+    <section v-if="session.length" class="study-session">
+      <div class="session-head"><span>{{ RITE_LABELS[setup.rite] }}</span><strong>{{ index + 1 }}/{{ session.length }}</strong></div>
+      <div class="progress"><span :style="{ width: `${((index + 1) / session.length) * 100}%` }"></span></div>
+      <article v-if="question" class="question-card">
+        <div class="badges"><span>{{ RITE_SHORT_LABELS[setup.rite] }}</span><span>{{ question.category }}</span></div>
+        <h2>{{ question.text }}</h2>
+        <button v-for="(option, optionIndex) in question.options" :key="option" class="option" :disabled="answered" :class="optionClass(optionIndex)" @click="answer(optionIndex)"><b>{{ String.fromCharCode(65 + optionIndex) }}</b>{{ option }}</button>
+        <div v-if="answered" class="explanation"><strong>{{ lastCorrect ? 'Correcto' : 'Incorrecto' }}</strong><p v-if="question.explanation">{{ question.explanation }}</p></div>
+        <button v-if="answered" class="primary next" @click="next">{{ index === session.length - 1 ? 'Ver calificación' : 'Siguiente pregunta' }}</button>
+      </article>
+    </section>
+
+    <section v-else-if="lastResult" class="result-panel">
+      <span class="kicker">Resultado</span><div class="grade">{{ lastResult.percent }}%</div><h2>{{ resultMessage }}</h2><p>{{ lastResult.correct }} correctas de {{ lastResult.total }}.</p>
+      <div class="result-actions"><button class="primary" @click="lastResult = null">Nueva sesión</button><button class="secondary" @click="router.push('/lobby')">Volver al lobby</button></div>
+    </section>
+
+    <template v-else>
+      <section class="setup-panel">
+        <div><span class="kicker">Configura tu práctica</span><h2>¿Qué quieres estudiar?</h2></div>
+        <label>Banco<select v-model="setup.rite" @change="syncLevel"><option v-for="rite in playableRites" :key="rite.value" :value="rite.value">{{ rite.label }}</option></select></label>
+        <label v-if="setup.rite !== 'libre'">Nivel<select v-model="setup.level"><option value="aprendiz">Aprendiz</option><option value="compañero">Compañero</option><option value="maestro">Maestro</option></select></label>
+        <label>Preguntas<select v-model="setup.amount"><option :value="10">10</option><option :value="25">25</option><option value="all">Todas las disponibles</option></select></label>
+        <div class="availability"><strong>{{ available.length }}</strong><span>preguntas compatibles</span></div>
+        <p v-if="setup.rite === 'libre'" class="free-note">⚠ Este banco es cultura general y NO ES MASÓN.</p>
+        <p v-else-if="needsExam" class="exam-note">🔐 Para estudiar este rito/nivel primero debes aprobar el examen de acceso del juego.</p>
+        <button class="primary" :disabled="available.length === 0" @click="start">{{ needsExam ? 'Hacer reteje' : 'Comenzar estudio' }}</button>
+      </section>
+
+      <section class="history">
+        <div><span class="kicker">En este dispositivo</span><h2>Historial de estudio</h2></div>
+        <div v-if="history.length === 0" class="empty">Aún no hay sesiones guardadas.</div>
+        <article v-for="item in history" :key="item.date" class="history-row"><div><strong>{{ RITE_SHORT_LABELS[item.rite] }}</strong><small>{{ new Date(item.date).toLocaleDateString() }} · {{ item.total }} preguntas</small></div><b>{{ item.percent }}%</b></article>
+      </section>
+    </template>
+  </main>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore'
+import { useAccessStore } from '@/stores/accessStore'
+import { useQuestionsStore } from '@/stores/questionsStore'
+import { requiresAccessExam } from '@/modules/game/access/riteAccess'
+import type { RoomLevel } from '@/modules/game/access/riteAccess'
+import { MASONIC_RITES, RITE_LABELS, RITE_SHORT_LABELS } from '@/modules/questions/questionRules'
+import type { MasonicRite, Question } from '@/modules/questions/types'
+
+interface StudyResult { rite: MasonicRite; total: number; correct: number; percent: number; date: number }
+const HISTORY_KEY = 'masonic-study-history'
+const router = useRouter()
+const authStore = useAuthStore()
+const accessStore = useAccessStore()
+const questionsStore = useQuestionsStore()
+const playableRites = MASONIC_RITES.filter((rite) => rite.value !== 'otro')
+const setup = reactive<{ rite: MasonicRite; level: RoomLevel; amount: number | 'all' }>({ rite: accessStore.preferredRite ?? 'reaa', level: authStore.masonicDegree ?? 'aprendiz', amount: 10 })
+const session = ref<Question[]>([])
+const index = ref(0)
+const correct = ref(0)
+const answered = ref(false)
+const selected = ref<number | null>(null)
+const lastCorrect = ref(false)
+const lastResult = ref<StudyResult | null>(null)
+const history = ref<StudyResult[]>([])
+
+const preferredRite = computed(() => accessStore.preferredRite ?? 'reaa')
+const available = computed(() => questionsStore.getQuestionsForRoom(setup.rite, setup.level))
+const needsExam = computed(() => requiresAccessExam(preferredRite.value, authStore.masonicDegree, setup.rite, setup.level, accessStore.certificationFor(setup.rite)))
+const question = computed(() => session.value[index.value] ?? null)
+const resultMessage = computed(() => !lastResult.value ? '' : lastResult.value.percent >= 90 ? 'Dominio excelente' : lastResult.value.percent >= 70 ? 'Buen avance' : 'Conviene seguir repasando')
+
+onMounted(async () => {
+  if (authStore.currentUser) await accessStore.loadForUser(authStore.currentUser.uid)
+  await questionsStore.loadQuestions({ fallbackToDefaults: true })
+  try { history.value = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') } catch { history.value = [] }
+  if (accessStore.preferredRite) setup.rite = accessStore.preferredRite
+})
+
+const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5)
+const syncLevel = () => { setup.level = setup.rite === 'libre' ? 'general' : (authStore.masonicDegree ?? 'aprendiz') }
+
+const start = () => {
+  if (needsExam.value) {
+    router.push({ path: '/reteje', query: { rite: setup.rite, level: setup.level, returnTo: '/study' } })
+    return
+  }
+  const amount = setup.amount === 'all' ? available.value.length : Math.min(setup.amount, available.value.length)
+  session.value = shuffle(available.value).slice(0, amount)
+  index.value = 0
+  correct.value = 0
+  answered.value = false
+  selected.value = null
+}
+
+const answer = (optionIndex: number) => {
+  if (!question.value || answered.value) return
+  selected.value = optionIndex
+  lastCorrect.value = optionIndex === question.value.correctAnswer
+  if (lastCorrect.value) correct.value += 1
+  answered.value = true
+}
+
+const optionClass = (optionIndex: number) => {
+  if (!answered.value || !question.value) return ''
+  if (optionIndex === question.value.correctAnswer) return 'correct'
+  if (optionIndex === selected.value) return 'wrong'
+  return ''
+}
+
+const next = () => {
+  if (index.value < session.value.length - 1) {
+    index.value += 1
+    answered.value = false
+    selected.value = null
+    lastCorrect.value = false
+    return
+  }
+  const result: StudyResult = { rite: setup.rite, total: session.value.length, correct: correct.value, percent: Math.round((correct.value / session.value.length) * 100), date: Date.now() }
+  lastResult.value = result
+  history.value = [result, ...history.value].slice(0, 20)
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+  session.value = []
+}
+</script>
+
+<style scoped>
+.study-view{min-height:100vh;padding:26px 18px 60px;background:radial-gradient(circle at 50% -10%,rgba(38,79,117,.33),transparent 38%),#050a11;color:#efe1c4}.page-head,.setup-panel,.history,.study-session,.result-panel{max-width:980px;margin-left:auto;margin-right:auto}.page-head{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding-bottom:20px;border-bottom:1px solid rgba(214,183,95,.24)}.back,.secondary{background:transparent;border:1px solid rgba(214,183,95,.3);color:#d8c076;padding:9px 12px;border-radius:7px}.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#c8a64d}.page-head h1,.setup-panel h2,.history h2,.result-panel h2{margin:2px 0;color:#efd891;font-family:Georgia,serif}.page-head p{margin:0;color:rgba(239,225,196,.58)}.offline{display:flex;flex-direction:column;align-items:flex-end;color:#7fc69a}.offline span{font-size:20px}.setup-panel{display:grid;grid-template-columns:1.2fr 1fr .8fr .8fr .6fr;gap:11px;align-items:end;margin-top:22px;padding:18px;border:1px solid rgba(214,183,95,.24);border-radius:12px;background:rgba(10,25,40,.75)}label{font-size:10px;text-transform:uppercase;color:#c8af70}select{display:block;width:100%;margin-top:5px;padding:10px}.availability{display:flex;flex-direction:column;align-items:center;padding:6px}.availability strong{font-size:26px;color:#e4c86d}.availability span{font-size:9px;color:rgba(239,225,196,.45)}.free-note,.exam-note{grid-column:1/-2;margin:0;font-size:10px;padding:8px;border-left:3px solid}.free-note{border-color:#4e9bb5;color:#85c8dc}.exam-note{border-color:#b58c31;color:#e1c374}.primary{border:0;border-radius:8px;padding:11px 14px;background:linear-gradient(135deg,#e0c269,#8b6914);color:#07101a;font-weight:900}.primary:disabled{opacity:.4}.history{margin-top:17px;padding:17px;border:1px solid rgba(214,183,95,.2);border-radius:11px;background:rgba(6,17,29,.7)}.history-row{display:flex;justify-content:space-between;align-items:center;padding:10px 3px;border-top:1px solid rgba(214,183,95,.12)}.history-row div{display:flex;flex-direction:column}.history-row small{text-transform:none;letter-spacing:0;color:rgba(239,225,196,.45)}.history-row b{color:#e6cb76}.empty{text-align:center;padding:24px;color:rgba(239,225,196,.4)}.study-session{margin-top:24px}.session-head{display:flex;justify-content:space-between}.progress{height:5px;margin:10px 0 16px;background:rgba(255,255,255,.07)}.progress span{display:block;height:100%;background:#c9a84c}.question-card{padding:22px;border:1px solid rgba(214,183,95,.3);border-radius:13px;background:rgba(8,22,36,.87)}.badges{display:flex;gap:7px}.badges span{font-size:10px;padding:5px 8px;border-radius:99px;background:rgba(214,183,95,.1);color:#dec47a}.question-card h2{color:#f1e3c6;line-height:1.4}.option{width:100%;display:grid;grid-template-columns:32px 1fr;gap:9px;margin:7px 0;padding:11px;text-align:left;border:1px solid rgba(214,183,95,.22);border-radius:8px;background:rgba(255,255,255,.025);color:#efe1c4}.option.correct{border-color:#4ca46b;background:rgba(76,164,107,.1)}.option.wrong{border-color:#c45b55;background:rgba(196,91,85,.1)}.option b{color:#e2c56c}.explanation{margin-top:14px;padding:12px;border-left:3px solid #b78d31;background:rgba(183,141,49,.07)}.explanation p{margin:5px 0 0;color:rgba(239,225,196,.65)}.next{margin-top:12px;float:right}.result-panel{text-align:center;margin-top:30px;padding:35px;border:1px solid rgba(214,183,95,.3);border-radius:14px;background:rgba(9,23,37,.82)}.grade{font:700 64px Georgia;color:#e8cf7a}.result-actions{display:flex;justify-content:center;gap:10px}@media(max-width:850px){.setup-panel{grid-template-columns:1fr 1fr}.free-note,.exam-note{grid-column:1/-1}.page-head{grid-template-columns:1fr}.offline{align-items:flex-start}}@media(max-width:520px){.setup-panel{grid-template-columns:1fr}}
+</style>
