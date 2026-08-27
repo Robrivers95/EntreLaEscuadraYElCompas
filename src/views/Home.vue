@@ -6,70 +6,32 @@
 
       <div class="hero-content slide-in">
         <div class="star-line" aria-hidden="true">✦ · ✧ · ✦ · ✧ · ✦</div>
-        <MasonicSeal :size="184" />
-        <span class="masonic-kicker">Juego masónico de conocimiento</span>
-        <h1>Entre La Escuadra<br />Y El Compás</h1>
-        <p class="hero-subtitle">Una mesa simbólica para aprender, recordar y compartir.</p>
-
-        <div class="hero-description temple-panel">
-          <p>
-            Recorre un tablero inspirado en la Logia y responde preguntas de historia,
-            simbolismo, filosofía, herramientas, artes y ceremonial según tu rito y grado.
-          </p>
-        </div>
-
-        <div class="symbol-row" aria-hidden="true">
-          <span>☉</span><span>△</span><span>□</span><strong>G</strong><span>✦</span><span>☽</span><span>⚒</span>
-        </div>
-
+        <MasonicSeal :size="160" />
+        <span class="overline">Juego de conocimiento · fraternidad · estudio</span>
+        <h1>Entre la Escuadra<br />y el Compás</h1>
+        <p class="hero-copy">Un solo salón para todos. Entra, descubre las mesas abiertas y elige cómo quieres jugar.</p>
         <div class="hero-actions">
-          <router-link to="/game-select" class="btn-primary">Entrar al Templo</router-link>
-          <router-link to="/login" class="btn-secondary">Ingresar con Registro Logia</router-link>
+          <router-link to="/lobby" class="primary">Entrar al salón</router-link>
+          <router-link to="/login" class="secondary">Iniciar sesión</router-link>
         </div>
+        <div class="mosaic-strip" aria-hidden="true"></div>
       </div>
     </section>
 
-    <div class="mosaic-strip"></div>
-
-    <section class="features-section">
-      <div class="container">
-        <div class="section-heading">
-          <span class="masonic-kicker">La experiencia</span>
-          <h2>Cuatro elementos de la partida</h2>
-        </div>
-        <div class="features-grid">
-          <article class="feature-card temple-panel">
-            <div class="feature-medallion">⚄</div>
-            <h3>Tablero por Turnos</h3>
-            <p>Avanza por casillas temáticas y responde preguntas filtradas por grado y rito.</p>
-          </article>
-
-          <article class="feature-card temple-panel">
-            <div class="feature-medallion">◉</div>
-            <h3>Salón en Tiempo Real</h3>
-            <p>Comparte la mesa con otros Hermanos y conserva la comunicación de voz del proyecto.</p>
-          </article>
-
-          <article class="feature-card temple-panel">
-            <div class="feature-medallion">G</div>
-            <h3>Banco Masónico</h3>
-            <p>Preguntas organizadas por rito, grado y materia, con banco REAA incluido.</p>
-          </article>
-
-          <article class="feature-card temple-panel">
-            <div class="feature-medallion">✦</div>
-            <h3>Puntuación</h3>
-            <p>Responder antes de mostrar los incisos otorga doble puntaje y premia el conocimiento directo.</p>
-          </article>
-        </div>
+    <section class="modes-section">
+      <div class="section-title"><span>Las tres modalidades</span><h2>Una misma cuenta, tres formas de jugar</h2><p>El rito se elige dentro de cada mesa o sesión; nunca te separa del lobby general.</p></div>
+      <div class="mode-grid">
+        <article class="mode-card main-mode"><span class="number">I</span><div class="icon">🎲</div><h3>Maratón de tablero</h3><p>Crea o entra a una sala. El dado mueve tu ficha y cada casilla determina la categoría de la pregunta.</p><ul><li>Salas visibles para todos</li><li>Tableros según el rito</li><li>Reteje de acceso cuando corresponde</li><li>Voz integrada dentro de la mesa</li></ul></article>
+        <article class="mode-card"><span class="number">II</span><div class="icon">⚔</div><h3>Reto de 10</h3><p>Responde diez preguntas y envía exactamente el mismo reto a otro jugador, incluso si responde después.</p><ul><li>Rival aleatorio o elegido</li><li>10 preguntas idénticas</li><li>Ganadas, perdidas y empates</li><li>Historial contra cada rival</li></ul></article>
+        <article class="mode-card"><span class="number">III</span><div class="icon">📖</div><h3>Estudio individual</h3><p>Practica sin competir, revisa tu calificación y utiliza el banco incluido como herramienta de estudio.</p><ul><li>10, 25 o todas las preguntas</li><li>Calificación inmediata</li><li>Historial local</li><li>Preparado para app instalada/offline</li></ul></article>
       </div>
     </section>
 
-    <footer class="footer-section">
-      <div class="footer-symbols" aria-hidden="true">B · △ · G · □ · J</div>
-      <p>Entre La Escuadra Y El Compás</p>
-      <small>Desarrollado para la comunidad masónica.</small>
-    </footer>
+    <section class="open-mode">
+      <div class="free-emblem">🌐</div><div><span>También para invitados al conocimiento</span><h2>Modo Libre · no masónico</h2><p>Un Maratón de cultura general para quien no tenga acceso a un banco ritual o simplemente quiera jugar sin contenido masónico. Está identificado claramente como <strong>NO MASÓN</strong>.</p></div>
+    </section>
+
+    <footer><span>△</span><span>□</span><b>G</b><span>○</span><p>Entre la Escuadra y el Compás</p></footer>
   </div>
 </template>
 
@@ -78,68 +40,5 @@ import MasonicSeal from '@/shared/MasonicSeal.vue'
 </script>
 
 <style scoped>
-.home-view { min-height: 100vh; overflow: hidden; }
-.hero-section {
-  min-height: 92vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 46px 20px 56px;
-  text-align: center;
-  position: relative;
-  background:
-    radial-gradient(circle at 50% 20%, rgba(213,183,97,.14), transparent 24rem),
-    radial-gradient(circle at 18% 50%, rgba(19,53,84,.22), transparent 27rem),
-    radial-gradient(circle at 82% 50%, rgba(91,31,39,.13), transparent 27rem);
-}
-.hero-section::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: min(760px, 90vw);
-  height: 38%;
-  transform: translateX(-50%);
-  background: linear-gradient(45deg, rgba(235,227,207,.07) 25%, transparent 25%, transparent 75%, rgba(235,227,207,.07) 75%), linear-gradient(45deg, rgba(235,227,207,.07) 25%, transparent 25%, transparent 75%, rgba(235,227,207,.07) 75%);
-  background-size: 52px 52px;
-  background-position: 0 0, 26px 26px;
-  clip-path: polygon(22% 0, 78% 0, 100% 100%, 0 100%);
-  opacity: .65;
-  pointer-events: none;
-}
-.hero-content { position: relative; z-index: 2; max-width: 760px; display: flex; flex-direction: column; align-items: center; }
-.star-line { color: rgba(213,183,97,.42); letter-spacing: .75em; font-size: 11px; margin-bottom: -6px; }
-.hero-section h1 { font-size: clamp(40px, 6vw, 68px); line-height: .95; color: #dfc673; margin: 10px 0 7px; text-transform: uppercase; letter-spacing: .09em; text-shadow: 0 7px 34px rgba(0,0,0,.65); }
-.hero-subtitle { color: var(--masonic-muted); font-size: 17px; margin: 8px 0 18px; letter-spacing: .035em; }
-.hero-description { max-width: 660px; padding: 20px 24px; border-radius: 3px; margin: 7px 0 14px; }
-.hero-description p { margin: 0; color: rgba(241,231,207,.78); line-height: 1.7; }
-.symbol-row { display: flex; gap: 17px; align-items: center; justify-content: center; color: rgba(213,183,97,.62); margin: 10px 0 2px; }
-.symbol-row strong { color: #ead484; font-size: 22px; }
-.hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
-.btn-primary, .btn-secondary { min-width: 220px; padding: 13px 22px; border-radius: 3px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
-.btn-primary { background: linear-gradient(135deg, #ead483, #896622); color: #080b10; border: 1px solid #f3df98; box-shadow: 0 10px 30px rgba(0,0,0,.32); }
-.btn-primary:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(213,183,97,.15); }
-.btn-secondary { background: rgba(8,13,21,.52); color: #dec775; border: 1px solid #806127; }
-.btn-secondary:hover { background: rgba(213,183,97,.08); transform: translateY(-2px); }
-.pillar { position: absolute; top: 6%; bottom: 0; width: 82px; opacity: .18; border-left: 1px solid #d5b761; border-right: 1px solid #d5b761; background: repeating-linear-gradient(90deg, transparent 0 13px, rgba(213,183,97,.12) 13px 16px); }
-.pillar::before, .pillar::after { content: ''; position: absolute; left: -18px; width: 116px; height: 32px; border: 1px solid #d5b761; background: rgba(213,183,97,.07); }
-.pillar::before { top: 0; } .pillar::after { bottom: 0; }
-.pillar.left { left: 5vw; } .pillar.right { right: 5vw; }
-.pillar span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 46px; font-weight: 700; color: #d5b761; }
-.mosaic-strip { margin: 0; }
-.features-section { padding: 70px 20px 78px; background: rgba(5,8,12,.34); }
-.section-heading { text-align: center; margin-bottom: 30px; }
-.section-heading h2 { color: #eee1be; font-size: 32px; margin-top: 3px; }
-.features-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 18px; }
-.feature-card { border-radius: 3px; padding: 27px 20px 24px; text-align: center; min-height: 260px; transition: .25s ease; }
-.feature-card:hover { transform: translateY(-5px); border-color: rgba(213,183,97,.7); }
-.feature-medallion { width: 72px; height: 72px; margin: 0 auto 15px; display: grid; place-items: center; border-radius: 50%; border: 1px solid #806127; box-shadow: inset 0 0 0 5px rgba(213,183,97,.04); color: #dbc16f; font-size: 35px; font-weight: 700; }
-.feature-card h3 { font-size: 18px; color: #d9c171; margin-bottom: 10px; }
-.feature-card p { color: rgba(241,231,207,.65); line-height: 1.55; font-size: 13px; }
-.footer-section { border-top: 1px solid rgba(213,183,97,.25); padding: 34px 20px; text-align: center; background: rgba(4,6,9,.7); }
-.footer-symbols { color: rgba(213,183,97,.46); letter-spacing: .4em; margin-bottom: 8px; }
-.footer-section p { color: #cdb66d; margin: 0; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; }
-.footer-section small { color: rgba(241,231,207,.4); }
-@media (max-width: 980px) { .features-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .pillar { opacity: .1; } }
-@media (max-width: 640px) { .hero-section { min-height: 88vh; padding-inline: 14px; } .pillar { display: none; } .hero-section h1 { font-size: 38px; } .hero-actions { width: 100%; } .btn-primary, .btn-secondary { width: 100%; } .features-grid { grid-template-columns: 1fr; } .star-line { letter-spacing: .45em; } }
+.home-view{min-height:100vh;background:linear-gradient(180deg,#06111e 0%,#03070d 72%,#050b12 100%);color:#efe1c4}.hero-section{min-height:92vh;display:grid;place-items:center;position:relative;overflow:hidden;padding:48px 22px;background:radial-gradient(circle at 50% 16%,rgba(35,82,134,.42),transparent 37%),radial-gradient(circle at 50% 55%,rgba(201,168,76,.08),transparent 45%)}.hero-content{width:min(760px,100%);display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;z-index:2}.star-line{color:rgba(229,201,116,.45);letter-spacing:12px;margin-bottom:10px}.overline,.section-title span,.open-mode span{margin-top:16px;color:#c6a34d;font-size:10px;font-weight:900;letter-spacing:2.3px;text-transform:uppercase}.hero-content h1{margin:8px 0 14px;color:#f0d88d;font:700 clamp(42px,8vw,78px)/.95 Georgia,serif;text-transform:uppercase;letter-spacing:2px;text-shadow:0 12px 35px rgba(0,0,0,.55)}.hero-copy{max-width:570px;margin:0;color:rgba(239,225,196,.66);font-size:16px}.hero-actions{display:flex;gap:10px;margin:25px 0 32px}.primary,.secondary{padding:13px 20px;border-radius:8px;font-weight:900;text-decoration:none;text-transform:uppercase;letter-spacing:.7px;font-size:12px}.primary{background:linear-gradient(135deg,#e1c36c,#8b6914);color:#07101a}.secondary{border:1px solid rgba(214,183,95,.55);color:#e5cd82;background:rgba(214,183,95,.04)}.mosaic-strip{width:min(620px,90vw);height:25px;border-top:2px solid #9e7a28;border-bottom:2px solid #9e7a28;background:conic-gradient(#eee 25%,#111 0 50%,#eee 0 75%,#111 0) 0 0/24px 24px;transform:perspective(220px) rotateX(35deg);opacity:.65}.pillar{position:absolute;top:8%;bottom:0;width:92px;border-left:1px solid rgba(214,183,95,.18);border-right:1px solid rgba(214,183,95,.18);background:linear-gradient(90deg,transparent,rgba(214,183,95,.055),transparent);display:flex;align-items:center;justify-content:center;opacity:.55}.pillar::before{content:'';position:absolute;top:0;width:122px;height:18px;border:1px solid rgba(214,183,95,.23);border-radius:4px}.pillar span{font:700 58px Georgia;color:rgba(214,183,95,.18)}.pillar.left{left:4vw}.pillar.right{right:4vw}.modes-section{max-width:1160px;margin:auto;padding:78px 20px}.section-title{text-align:center;max-width:700px;margin:0 auto 34px}.section-title h2{margin:7px 0;color:#efd892;font:700 35px Georgia,serif}.section-title p{color:rgba(239,225,196,.55)}.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.mode-card{position:relative;overflow:hidden;padding:24px 22px;border:1px solid rgba(214,183,95,.24);border-radius:14px;background:linear-gradient(145deg,rgba(15,37,60,.8),rgba(3,10,18,.94));box-shadow:0 18px 40px rgba(0,0,0,.2)}.mode-card.main-mode{border-color:rgba(214,183,95,.48)}.number{position:absolute;right:13px;top:7px;font:700 48px Georgia;color:rgba(214,183,95,.1)}.icon{font-size:37px}.mode-card h3{margin:10px 0 6px;color:#e8cd78;font:700 22px Georgia,serif}.mode-card p{min-height:74px;color:rgba(239,225,196,.58);font-size:13px;line-height:1.55}.mode-card ul{list-style:none;padding:13px 0 0;margin:0;border-top:1px solid rgba(214,183,95,.13);display:grid;gap:6px}.mode-card li{font-size:11px;color:rgba(239,225,196,.65)}.mode-card li::before{content:'✦';color:#b89136;margin-right:7px}.open-mode{max-width:1020px;margin:0 auto 75px;padding:25px;display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;border:1px solid rgba(75,151,179,.4);border-radius:14px;background:linear-gradient(135deg,rgba(23,77,99,.2),rgba(4,15,25,.8))}.free-emblem{width:74px;height:74px;border:1px solid rgba(90,169,196,.5);border-radius:50%;display:grid;place-items:center;font-size:34px}.open-mode span{margin:0;color:#71b6ca}.open-mode h2{margin:4px 0;color:#a8d9e5;font:700 27px Georgia,serif}.open-mode p{margin:0;color:rgba(222,239,241,.62);font-size:13px}.open-mode strong{color:#a8d9e5}footer{padding:35px;text-align:center;border-top:1px solid rgba(214,183,95,.16);color:rgba(214,183,95,.55);letter-spacing:9px}footer b{color:#ddc36e}footer p{letter-spacing:2px;color:rgba(239,225,196,.35);font-size:10px;text-transform:uppercase}@media(max-width:900px){.pillar{display:none}.mode-grid{grid-template-columns:1fr}.mode-card p{min-height:0}.hero-section{min-height:82vh}}@media(max-width:560px){.hero-actions{flex-direction:column;width:100%}.primary,.secondary{text-align:center}.open-mode{grid-template-columns:1fr;text-align:center}.free-emblem{margin:auto}.modes-section{padding-top:50px}}
 </style>
