@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "site": "juegodemesamasonico",
+    "public": "dist",
+    "ignore": [
+      "firebase.juegodemesamasonico.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
