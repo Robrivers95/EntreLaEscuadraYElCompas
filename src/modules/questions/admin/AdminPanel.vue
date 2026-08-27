@@ -110,6 +110,18 @@ const starterQuestions = [...DEFAULT_QUESTIONS, ...LEGACY_STARTER_QUESTIONS]
 
 onMounted(() => reloadQuestions())
 
+const toQuestionInput = (question: Question): QuestionInput => ({
+  text: question.text,
+  category: question.category,
+  difficulty: question.difficulty,
+  options: [...question.options],
+  correctAnswer: question.correctAnswer,
+  directAnswer: question.directAnswer,
+  acceptedDirectAnswers: question.acceptedDirectAnswers ? [...question.acceptedDirectAnswers] : undefined,
+  explanation: question.explanation,
+  basePoints: question.basePoints,
+})
+
 const reloadQuestions = async () => {
   await questionsStore.loadQuestions({ force: true, fallbackToDefaults: false })
 }
@@ -155,10 +167,11 @@ const handleSubmitQuestion = async (question: QuestionInput) => {
 }
 
 const duplicateQuestion = async (question: Question) => {
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...copy } = question
+  const copy = toQuestionInput(question)
+  const duplicatedText = `${copy.text} (copia)`
   try {
-    const newId = await questionsService.addQuestion({ ...copy, text: `${copy.text} (copia)` })
-    questionsStore.addQuestion({ ...copy, text: `${copy.text} (copia)`, id: newId })
+    const newId = await questionsService.addQuestion({ ...copy, text: duplicatedText })
+    questionsStore.addQuestion({ ...copy, text: duplicatedText, id: newId })
   } catch (err) {
     console.error('Error duplicating question:', err)
     alert('No se pudo duplicar la pregunta.')
@@ -172,8 +185,7 @@ const importStarterQuestions = async () => {
     const missing = starterQuestions.filter((question) => !existing.has(normalizeAnswer(question.text)))
 
     for (const question of missing) {
-      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = question
-      await questionsService.addQuestion(payload)
+      await questionsService.addQuestion(toQuestionInput(question))
     }
 
     await reloadQuestions()
