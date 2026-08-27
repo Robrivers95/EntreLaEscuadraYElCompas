@@ -30,7 +30,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-export interface BoardPlayerToken {
+interface BoardPlayerToken {
   index: number
   color: string
   name: string
@@ -197,9 +197,9 @@ const categoryColor = computed(() => categoryColors[props.category] || 'rgba(201
 }
 
 @keyframes characterIdle {
-  0%, 100% { translate: 0 0; rotate: 0deg; }
-  45% { translate: 0 -2px; rotate: -1.5deg; }
-  55% { translate: 0 -2px; rotate: 1.5deg; }
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  45% { transform: translateY(-2px) rotate(-1.5deg); }
+  55% { transform: translateY(-2px) rotate(1.5deg); }
 }
 
 @keyframes shadowPulse {
