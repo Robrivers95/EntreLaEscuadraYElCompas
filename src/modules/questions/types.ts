@@ -1,12 +1,13 @@
 export type MasonicDegree = 'aprendiz' | 'compañero' | 'maestro'
-export type MasonicRite = 'reaa' | 'york' | 'frances' | 'nacional-mexicano' | 'otro'
+export type QuestionDifficulty = MasonicDegree | 'general'
+export type MasonicRite = 'reaa' | 'york' | 'frances' | 'nacional-mexicano' | 'libre' | 'otro'
 export type AnswerMode = 'direct' | 'multiple-choice'
 
 export interface Question {
   id: string
   text: string
   category: string
-  difficulty: MasonicDegree
+  difficulty: QuestionDifficulty
   /** Rite this question belongs to. Missing values from the legacy bank are treated as REAA. */
   rite?: MasonicRite
   options: string[]
