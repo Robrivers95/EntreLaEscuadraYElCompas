@@ -93,6 +93,7 @@ import QuestionForm from './QuestionForm.vue'
 import { useQuestionsStore } from '@/stores/questionsStore'
 import { questionsService } from '@/modules/questions/questionsService'
 import { DEFAULT_QUESTIONS } from '@/modules/questions/defaultQuestions'
+import { LEGACY_STARTER_QUESTIONS } from '@/modules/questions/legacyStarterQuestions'
 import { DEGREE_LABELS, MASONIC_CATEGORIES, normalizeAnswer } from '@/modules/questions/questionRules'
 import type { MasonicDegree, Question } from '@/modules/questions/types'
 
@@ -105,6 +106,7 @@ const filterDifficulty = ref('')
 const searchText = ref('')
 const seeding = ref(false)
 const categories = MASONIC_CATEGORIES
+const starterQuestions = [...DEFAULT_QUESTIONS, ...LEGACY_STARTER_QUESTIONS]
 
 onMounted(() => reloadQuestions())
 
@@ -167,7 +169,7 @@ const importStarterQuestions = async () => {
   seeding.value = true
   try {
     const existing = new Set(questionsStore.questions.map((question) => normalizeAnswer(question.text)))
-    const missing = DEFAULT_QUESTIONS.filter((question) => !existing.has(normalizeAnswer(question.text)))
+    const missing = starterQuestions.filter((question) => !existing.has(normalizeAnswer(question.text)))
 
     for (const question of missing) {
       const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = question
