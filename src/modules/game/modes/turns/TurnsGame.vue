@@ -73,6 +73,7 @@ import { roomService } from '@/modules/game/lobby/roomService'
 import { DEGREE_LABELS, GENERAL_CATEGORIES, MASONIC_CATEGORIES, RITE_LABELS, getQuestionPoints } from '@/modules/questions/questionRules'
 import type { AnswerMode, Question } from '@/modules/questions/types'
 import type { Player } from '@/modules/game/types'
+import type { RoomPlayer } from '@/modules/game/lobby/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -175,10 +176,11 @@ const handleSkip = async () => {
   await advanceTurn(room.value.players.map((player) => ({ ...player })))
 }
 
-const advanceTurn = async (players: typeof room.value.players) => {
-  if (!room.value) return
-  const nextIndex = (room.value.currentPlayerIndex + 1) % players.length
-  await roomService.patchRoom(room.value.id, { players, currentPlayerIndex:nextIndex, currentQuestionId:null })
+const advanceTurn = async (players: RoomPlayer[]) => {
+  const activeRoom = room.value
+  if (!activeRoom || players.length === 0) return
+  const nextIndex = (activeRoom.currentPlayerIndex + 1) % players.length
+  await roomService.patchRoom(activeRoom.id, { players, currentPlayerIndex:nextIndex, currentQuestionId:null })
 }
 
 const leave = async () => {
