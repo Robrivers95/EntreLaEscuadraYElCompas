@@ -5,8 +5,10 @@ import { DEFAULT_QUESTIONS } from '@/modules/questions/defaultQuestions'
 import { LEGACY_STARTER_QUESTIONS } from '@/modules/questions/legacyStarterQuestions'
 import { REAA_LITURGICAL_QUESTIONS } from '@/modules/questions/reaaLiturgicalQuestions'
 import { REAA_NUEVO_LEON_QUESTIONS } from '@/modules/questions/reaaNuevoLeonQuestions'
-import { getQuestionRite, isQuestionAllowedForDegree } from '@/modules/questions/questionRules'
-import type { MasonicDegree, MasonicRite, Question } from '@/modules/questions/types'
+import { OTHER_RITE_STARTER_QUESTIONS } from '@/modules/questions/otherRiteQuestions'
+import { FREE_GENERAL_QUESTIONS } from '@/modules/questions/freeGeneralQuestions'
+import { getQuestionRite, isQuestionAllowedForDegree, normalizeAnswer } from '@/modules/questions/questionRules'
+import type { MasonicDegree, MasonicRite, Question, QuestionDifficulty } from '@/modules/questions/types'
 
 interface LoadQuestionsOptions {
   force?: boolean
@@ -16,9 +18,20 @@ interface LoadQuestionsOptions {
 export const STARTER_QUESTIONS = [
   ...REAA_LITURGICAL_QUESTIONS,
   ...REAA_NUEVO_LEON_QUESTIONS,
+  ...OTHER_RITE_STARTER_QUESTIONS,
+  ...FREE_GENERAL_QUESTIONS,
   ...DEFAULT_QUESTIONS,
   ...LEGACY_STARTER_QUESTIONS,
 ]
+
+const questionKey = (question: Question) => `${getQuestionRite(question)}|${normalizeAnswer(question.text)}`
+
+const mergeWithStarters = (remoteQuestions: Question[]): Question[] => {
+  const merged = new Map<string, Question>()
+  STARTER_QUESTIONS.forEach((question) => merged.set(questionKey(question), { ...question }))
+  remoteQuestions.forEach((question) => merged.set(questionKey(question), { ...question }))
+  return Array.from(merged.values())
+}
 
 export const useQuestionsStore = defineStore('questions', () => {
   const questions = ref<Question[]>([])
@@ -55,13 +68,11 @@ export const useQuestionsStore = defineStore('questions', () => {
     error.value = null
     try {
       const remoteQuestions = await questionsService.getQuestions()
-      if (remoteQuestions.length > 0) {
-        questions.value = remoteQuestions
-        usingDefaultQuestions.value = false
-      } else if (fallbackToDefaults) {
-        useDefaults()
+      if (fallbackToDefaults) {
+        questions.value = mergeWithStarters(remoteQuestions)
+        usingDefaultQuestions.value = true
       } else {
-        questions.value = []
+        questions.value = remoteQuestions
         usingDefaultQuestions.value = false
       }
       loaded.value = true
@@ -88,6 +99,18 @@ export const useQuestionsStore = defineStore('questions', () => {
       isQuestionAllowedForDegree(question.difficulty, degree),
   )
 
+  const getQuestionsForRoom = (
+    rite: MasonicRite,
+    level: QuestionDifficulty,
+    category?: string,
+  ): Question[] => questions.value.filter((question) => {
+    if (getQuestionRite(question) !== rite) return false
+    if (category && question.category !== category) return false
+    if (rite === 'libre') return question.difficulty === 'general'
+    if (level === 'general') return false
+    return isQuestionAllowedForDegree(question.difficulty, level)
+  })
+
   const countForRite = (rite: MasonicRite) =>
     questions.value.filter((question) => getQuestionRite(question) === rite).length
 
@@ -109,6 +132,7 @@ export const useQuestionsStore = defineStore('questions', () => {
     categories,
     loadQuestions,
     getEligibleQuestions,
+    getQuestionsForRoom,
     countForRite,
     setQuestions,
     addQuestion,
