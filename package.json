@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "voice:preserve": "node scripts/preserve-voice-config.mjs",
+    "voice:require": "node scripts/preserve-voice-config.mjs --require",
     "build": "node scripts/preserve-voice-config.mjs && vue-tsc && vite build",
+    "deploy:production": "node scripts/preserve-voice-config.mjs --require && vue-tsc && vite build && firebase deploy --only hosting --project juegodemesamasonico --config firebase.juegodemesamasonico.json",
     "preview": "vite preview",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
