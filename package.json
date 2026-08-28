@@ -4,7 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "voice:check": "node scripts/check-voice-invariant.mjs",
+    "voice:preserve": "node scripts/preserve-voice-config.mjs",
+    "voice:require": "node scripts/check-voice-invariant.mjs",
+    "build": "node scripts/check-voice-invariant.mjs && node scripts/preserve-voice-config.mjs && vue-tsc && vite build",
+    "deploy:production": "node scripts/check-voice-invariant.mjs && node scripts/preserve-voice-config.mjs && vue-tsc && vite build && firebase deploy --only hosting --project juegodemesamasonico --config firebase.juegodemesamasonico.json",
     "preview": "vite preview",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",

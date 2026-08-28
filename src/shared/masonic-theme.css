@@ -1,220 +1,149 @@
-/* Masonic Theme CSS */
+/* Temple / board-game theme */
 :root {
-  --masonic-dark: #1a0a00;
-  --masonic-gold: #c9a84c;
-  --masonic-gold-dark: #8b6914;
-  --masonic-text: #f0e6c8;
-  --masonic-gold-light: #e8d9b8;
+  --masonic-ink: #060910;
+  --masonic-dark: #090d14;
+  --masonic-blue: #10243c;
+  --masonic-blue-soft: #17314d;
+  --masonic-gold: #d5b761;
+  --masonic-gold-bright: #f1db91;
+  --masonic-gold-dark: #73551b;
+  --masonic-text: #f1e7cf;
+  --masonic-muted: rgba(241, 231, 207, .64);
+  --masonic-red: #6f2028;
+  --masonic-stone: #d8cfb8;
+  --panel-bg: rgba(8, 13, 21, .86);
+  --panel-border: rgba(213, 183, 97, .42);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; background: var(--masonic-ink); }
 body {
-  background-color: var(--masonic-dark);
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(213,183,97,.15), transparent 26rem),
+    radial-gradient(circle at 12% 18%, rgba(24,55,88,.28), transparent 30rem),
+    radial-gradient(circle at 88% 22%, rgba(87,32,38,.15), transparent 26rem),
+    linear-gradient(180deg, #101824 0%, #080b11 46%, #05070b 100%);
   color: var(--masonic-text);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: Georgia, 'Times New Roman', serif;
   line-height: 1.6;
-  letter-spacing: 0.3px;
+  letter-spacing: .25px;
 }
-
-html {
-  scroll-behavior: smooth;
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .11;
+  background-image:
+    linear-gradient(45deg, rgba(239,229,202,.38) 25%, transparent 25%, transparent 75%, rgba(239,229,202,.38) 75%),
+    linear-gradient(45deg, rgba(239,229,202,.38) 25%, transparent 25%, transparent 75%, rgba(239,229,202,.38) 75%);
+  background-size: 64px 64px;
+  background-position: 0 0, 32px 32px;
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 52%, #000 78%, #000 100%);
 }
-
-/* Scrollbar Styling */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(26, 10, 0, 0.5);
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c9a84c;
-  border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #f0e6c8;
-}
-
-/* Typography */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease; }
+a { color: var(--masonic-gold); text-decoration: none; transition: color .2s ease, opacity .2s ease; }
+a:hover { color: var(--masonic-gold-bright); }
+p { color: var(--masonic-text); }
+h1, h2, h3, h4, h5, h6 {
   color: var(--masonic-gold);
-  letter-spacing: 1px;
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: .055em;
 }
 
-p {
-  color: var(--masonic-text);
-}
-
-a {
-  color: var(--masonic-gold);
-  text-decoration: none;
-  transition: color 0.3s ease;
-}
-
-a:hover {
-  color: var(--masonic-gold-light);
-}
-
-/* Form Elements */
-input,
-textarea,
-select {
-  background-color: rgba(201, 168, 76, 0.1);
+input, textarea, select {
+  background: rgba(5, 9, 15, .86);
   border: 1px solid var(--masonic-gold-dark);
   color: var(--masonic-text);
-  padding: 10px;
-  border-radius: 5px;
-  font-family: inherit;
-  transition: all 0.3s ease;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none;
-  background-color: rgba(201, 168, 76, 0.2);
-  border-color: var(--masonic-gold);
-  box-shadow: 0 0 10px rgba(201, 168, 76, 0.3);
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: rgba(240, 230, 200, 0.5);
-}
-
-/* Buttons */
-button {
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-/* Utility Classes */
-.masonic-border {
-  border: 2px solid var(--masonic-gold);
+  padding: 10px 12px;
   border-radius: 8px;
+  transition: .2s ease;
 }
-
-.masonic-shadow {
-  box-shadow: 0 0 20px rgba(201, 168, 76, 0.2);
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--masonic-gold);
+  box-shadow: 0 0 0 3px rgba(213,183,97,.12), inset 0 0 22px rgba(213,183,97,.045);
 }
+input::placeholder, textarea::placeholder { color: rgba(241,231,207,.42); }
 
-.masonic-gradient {
-  background: linear-gradient(135deg, var(--masonic-gold) 0%, var(--masonic-gold-dark) 100%);
+::selection { background: rgba(213,183,97,.32); color: #fff8e5; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #080b10; }
+::-webkit-scrollbar-thumb { background: linear-gradient(#8b6c2d, #d5b761); border-radius: 999px; border: 2px solid #080b10; }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+.flex-center { display: flex; justify-content: center; align-items: center; }
+.text-center { text-align: center; }
+.text-gold { color: var(--masonic-gold); }
+.text-light { color: var(--masonic-text); }
+.text-dark { color: var(--masonic-dark); }
+
+.masonic-border {
+  border: 1px solid var(--panel-border);
+  box-shadow: inset 0 0 0 1px rgba(213,183,97,.05);
 }
+.masonic-shadow { box-shadow: 0 22px 60px rgba(0,0,0,.38), 0 0 28px rgba(213,183,97,.08); }
+.masonic-gradient { background: linear-gradient(135deg, var(--masonic-gold-bright), var(--masonic-gold-dark)); }
 
-.text-gold {
-  color: var(--masonic-gold);
+/* Reusable decorative panel: reads more like a game board than an admin card. */
+.temple-panel {
+  position: relative;
+  background:
+    linear-gradient(145deg, rgba(18,34,53,.84), rgba(6,10,16,.94) 54%, rgba(22,14,9,.94)),
+    var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 18px 50px rgba(0,0,0,.34);
 }
-
-.text-light {
-  color: var(--masonic-text);
+.temple-panel::before,
+.temple-panel::after {
+  content: '✦';
+  position: absolute;
+  color: rgba(213,183,97,.55);
+  font-size: 10px;
+  line-height: 1;
 }
+.temple-panel::before { left: 9px; top: 8px; }
+.temple-panel::after { right: 9px; bottom: 8px; }
 
-.text-dark {
-  color: var(--masonic-dark);
-}
-
-/* Masonic Symbols and Decorations */
-.symbol-compass::before {
-  content: '⧖';
-}
-
-.symbol-square::before {
-  content: '⚒';
-}
-
-.symbol-triangle::before {
-  content: '△';
-}
-
-.symbol-moon::before {
-  content: '☽';
-}
-
-/* Layout Utilities */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-.flex-center {
-  display: flex;
-  justify-content: center;
+.masonic-kicker {
+  display: inline-flex;
   align-items: center;
+  gap: 8px;
+  color: var(--masonic-gold);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+}
+.masonic-kicker::before,
+.masonic-kicker::after { content: '◆'; font-size: 6px; opacity: .72; }
+
+.mosaic-strip {
+  height: 12px;
+  border: 1px solid rgba(213,183,97,.28);
+  background-color: #0b0f16;
+  background-image:
+    linear-gradient(45deg, rgba(240,232,212,.92) 25%, transparent 25%, transparent 75%, rgba(240,232,212,.92) 75%),
+    linear-gradient(45deg, rgba(240,232,212,.92) 25%, #111722 25%, #111722 75%, rgba(240,232,212,.92) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  opacity: .85;
 }
 
-.text-center {
-  text-align: center;
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes goldPulse { 0%,100% { filter: drop-shadow(0 0 0 rgba(213,183,97,0)); } 50% { filter: drop-shadow(0 0 12px rgba(213,183,97,.28)); } }
+.fade-in { animation: fadeIn .45s ease-out; }
+.slide-in { animation: slideIn .45s ease-out; }
 
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.fade-in {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-.slide-in {
-  animation: slideIn 0.5s ease-in-out;
-}
-
-/* Responsive Design */
 @media (max-width: 768px) {
-  :root {
-    font-size: 14px;
-  }
-
-  h1 {
-    font-size: 24px;
-  }
-
-  h2 {
-    font-size: 20px;
-  }
-
-  h3 {
-    font-size: 18px;
-  }
-}
-
-/* Dark Mode - Already built-in with the dark theme */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: var(--masonic-dark);
-    color: var(--masonic-text);
-  }
+  :root { font-size: 14px; }
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  h3 { font-size: 18px; }
+  body::before { background-size: 46px 46px; background-position: 0 0, 23px 23px; }
 }

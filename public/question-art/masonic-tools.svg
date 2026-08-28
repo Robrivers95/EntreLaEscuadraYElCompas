@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-labelledby="title desc">
+  <title id="title">Herramientas simbólicas</title><desc id="desc">Ilustración original de herramientas constructivas usadas en preguntas masónicas: escuadra, compás, mazo, cincel, regla y nivel.</desc>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#10283f"/><stop offset="1" stop-color="#050a10"/></linearGradient></defs>
+  <rect width="900" height="600" rx="32" fill="url(#bg)"/>
+  <g stroke="#e0c36b" stroke-width="14" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M125 405 310 220 360 270 225 405Z"/>
+    <path d="M425 130 350 360M475 130 550 360M425 130Q450 95 475 130"/>
+    <path d="M635 175h115v62H635zM692 237v205"/>
+    <path d="M770 340 825 470M825 470l-35 18"/>
+    <path d="M95 500h300M120 485v30M180 485v30M240 485v30M300 485v30M360 485v30"/>
+    <path d="M510 500h280M555 455h190v45H555zM650 455v45"/>
+  </g>
+  <g fill="#f0dfa7" font-family="Arial,sans-serif" text-anchor="middle" font-size="20" opacity=".82"><text x="235" y="445">ESCUADRA</text><text x="450" y="405">COMPÁS</text><text x="692" y="475">MAZO</text><text x="815" y="525">CINCEL</text><text x="245" y="555">REGLA</text><text x="650" y="555">NIVEL</text></g>
+</svg>

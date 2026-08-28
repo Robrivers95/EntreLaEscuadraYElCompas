@@ -1,3 +1,5 @@
+import type { MasonicDegree, MasonicRite } from '@/modules/questions/types'
+
 export interface Player {
   id: string
   name: string
@@ -5,6 +7,9 @@ export interface Player {
   score: number
   color: string
   avatar?: string
+  /** Degree validated from Registro Logia; never user-entered inside the game. */
+  degree?: MasonicDegree
+  groupId?: string
 }
 
 export interface GameMode {
@@ -19,6 +24,9 @@ export interface GameState {
   currentPlayerIndex: number
   boardSize: number
   selectedCategories: string[]
+  selectedRite?: MasonicRite
+  /** Maximum degree material this room may expose; in mixed rooms this should be the lowest member degree. */
+  degreeCeiling?: MasonicDegree
   status: 'waiting' | 'playing' | 'finished'
   winner?: string
   createdAt: number
