@@ -1,4 +1,4 @@
-import type { AnswerMode, MasonicDegree, MasonicRite, Question, QuestionDifficulty } from './types'
+import type { AnswerMode, MasonicDegree, MasonicRite, Question, QuestionDifficulty, QuestionGameMode } from './types'
 
 export const MASONIC_CATEGORIES = [
   'Historia',
@@ -24,13 +24,30 @@ export const GENERAL_CATEGORIES = [
   'Deportes',
 ] as const
 
-export const MASONIC_RITES: Array<{ value: MasonicRite; label: string; shortLabel: string; masonic: boolean }> = [
-  { value: 'reaa', label: 'Rito Escocés Antiguo y Aceptado', shortLabel: 'REAA', masonic: true },
-  { value: 'york', label: 'Rito de York', shortLabel: 'York', masonic: true },
-  { value: 'frances', label: 'Rito Francés', shortLabel: 'Francés', masonic: true },
-  { value: 'nacional-mexicano', label: 'Rito Nacional Mexicano', shortLabel: 'RNM', masonic: true },
-  { value: 'libre', label: 'Modo Libre · Cultura general', shortLabel: 'Libre', masonic: false },
-  { value: 'otro', label: 'Otro rito / banco personalizado', shortLabel: 'Otro', masonic: true },
+/** Las diez sefirot forman también las diez casillas del tablero libre de Kabbalah. */
+export const KABBALAH_CATEGORIES = [
+  'Keter',
+  'Chokhmah',
+  'Binah',
+  'Chesed',
+  'Gevurah',
+  'Tiferet',
+  'Netzach',
+  'Hod',
+  'Yesod',
+  'Malkhut',
+] as const
+
+export const ALL_GAME_MODES: QuestionGameMode[] = ['board', 'duel', 'study']
+
+export const MASONIC_RITES: Array<{ value: MasonicRite; label: string; shortLabel: string; masonic: boolean; open: boolean }> = [
+  { value: 'reaa', label: 'Rito Escocés Antiguo y Aceptado', shortLabel: 'REAA', masonic: true, open: false },
+  { value: 'york', label: 'Rito de York', shortLabel: 'York', masonic: true, open: false },
+  { value: 'frances', label: 'Rito Francés', shortLabel: 'Francés', masonic: true, open: false },
+  { value: 'nacional-mexicano', label: 'Rito Nacional Mexicano', shortLabel: 'RNM', masonic: true, open: false },
+  { value: 'kabala', label: 'Kabbalah · Árbol de la Vida (libre)', shortLabel: 'Kabbalah', masonic: false, open: true },
+  { value: 'libre', label: 'Modo Libre · Cultura general', shortLabel: 'Libre', masonic: false, open: true },
+  { value: 'otro', label: 'Otro rito / banco personalizado', shortLabel: 'Otro', masonic: true, open: false },
 ]
 
 export const RITE_LABELS = Object.fromEntries(
@@ -52,6 +69,12 @@ export const DIFFICULTY_LABELS: Record<QuestionDifficulty, string> = {
   general: 'General',
 }
 
+export const GAME_MODE_LABELS: Record<QuestionGameMode, string> = {
+  board: 'Tablero',
+  duel: '1vs1',
+  study: 'Estudio',
+}
+
 const DEGREE_ORDER: MasonicDegree[] = ['aprendiz', 'compañero', 'maestro']
 
 export function normalizeMiLogiaDegree(value?: string | null): MasonicDegree | null {
@@ -64,6 +87,24 @@ export function normalizeMiLogiaDegree(value?: string | null): MasonicDegree | n
 
 export function getQuestionRite(question: Question): MasonicRite {
   return question.rite ?? 'reaa'
+}
+
+export function getQuestionGameModes(question: Question): QuestionGameMode[] {
+  return question.gameModes?.length ? question.gameModes : ALL_GAME_MODES
+}
+
+export function questionSupportsMode(question: Question, mode: QuestionGameMode): boolean {
+  return question.enabled !== false && getQuestionGameModes(question).includes(mode)
+}
+
+export function isOpenKnowledgeBank(rite: MasonicRite): boolean {
+  return rite === 'libre' || rite === 'kabala'
+}
+
+export function getCategoriesForRite(rite: MasonicRite): string[] {
+  if (rite === 'libre') return [...GENERAL_CATEGORIES]
+  if (rite === 'kabala') return [...KABBALAH_CATEGORIES]
+  return [...MASONIC_CATEGORIES]
 }
 
 export function getAllowedDifficulties(degree: MasonicDegree): MasonicDegree[] {
