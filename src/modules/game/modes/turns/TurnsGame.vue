@@ -16,14 +16,9 @@
     <section v-else-if="room.status === 'waiting'" class="waiting-panel">
       <div class="seal-line">△ □ <b>G</b> ○</div>
       <h2>Esperando jugadores</h2>
-      <p>La sala es visible en el lobby general. No importa qué rito tenga configurado cada usuario fuera de esta mesa.</p>
-      <div class="players-waiting">
-        <div v-for="player in room.players" :key="player.uid" class="waiting-player"><span class="avatar">{{ initials(player.name) }}</span><div><strong>{{ player.name }}</strong><small>{{ player.degree ? DEGREE_LABELS[player.degree] : 'Acceso por sala' }}</small></div><em v-if="player.uid === room.hostUid">Anfitrión</em></div>
-      </div>
-      <div class="waiting-actions">
-        <button v-if="isHost" class="primary" :disabled="room.players.length < 2" @click="startGame">{{ room.players.length < 2 ? 'Falta otro jugador' : 'Iniciar partida' }}</button>
-        <span v-else>El anfitrión iniciará la partida.</span>
-      </div>
+      <p>La sala es visible en el lobby general. El rito de la mesa define sus preguntas, pero no separa a los usuarios en el acceso general.</p>
+      <div class="players-waiting"><div v-for="player in room.players" :key="player.uid" class="waiting-player"><span class="avatar">{{ initials(player.name) }}</span><div><strong>{{ player.name }}</strong><small>{{ player.degree ? DEGREE_LABELS[player.degree] : 'Acceso libre' }}</small></div><em v-if="player.uid === room.hostUid">Anfitrión</em></div></div>
+      <div class="waiting-actions"><button v-if="isHost" class="primary" :disabled="room.players.length < 2" @click="startGame">{{ room.players.length < 2 ? 'Falta otro jugador' : 'Iniciar partida' }}</button><span v-else>El anfitrión iniciará la partida.</span></div>
     </section>
 
     <section v-else-if="room.status === 'finished'" class="finished-panel">
@@ -37,31 +32,22 @@
       <section class="game-grid">
         <div class="board-column">
           <GameBoard :players="boardPlayers" :board-size="room.boardSize" :categories="categories" />
-          <div class="room-legend"><span>{{ room.rite === 'libre' ? '⚠ MODO NO MASÓN' : riteLabel }}</span><span>Meta: casilla {{ room.boardSize }}</span></div>
+          <div class="room-legend"><span>{{ room.rite === 'libre' ? '⚠ CULTURA GENERAL · NO MASÓN' : room.rite === 'kabala' ? '✦ KABBALAH · RUTA LIBRE' : riteLabel }}</span><span>Meta: casilla {{ room.boardSize }}</span></div>
         </div>
-
         <div class="action-column">
           <QuestionCard v-if="currentQuestion && isMyTurn" :question="currentQuestion" @resolved="handleResolution" @skip="handleSkip" />
-
           <div v-else-if="currentQuestion" class="spectator-question">
-            <span class="kicker">Responde {{ currentPlayer?.name }}</span><h2>{{ currentQuestion.text }}</h2>
+            <span class="kicker">Responde {{ currentPlayer?.name }}</span><QuestionMedia :question="currentQuestion" /><h2>{{ currentQuestion.text }}</h2>
             <div v-for="(option, optionIndex) in currentQuestion.options" :key="option" class="readonly-option"><b>{{ String.fromCharCode(65 + optionIndex) }}</b>{{ option }}</div>
-            <p>Estás viendo la misma pregunta. Sólo el jugador en turno puede registrar la respuesta.</p>
+            <p>Todos en la llamada ven la misma pregunta; sólo el jugador en turno registra la respuesta.</p>
           </div>
-
           <div v-else class="dice-panel" :class="{ mine: isMyTurn }">
-            <span class="kicker">{{ isMyTurn ? 'Tu turno' : `Turno de ${currentPlayer?.name}` }}</span>
-            <div class="dice" :class="{ rolling: diceRolling }">{{ diceFace }}</div>
-            <p v-if="room.currentCategory">Última categoría: <strong>{{ room.currentCategory }}</strong></p>
-            <button class="primary roll" :disabled="!isMyTurn || diceRolling" @click="rollDice">🎲 Lanzar dado</button>
-            <small v-if="!isMyTurn">El tablero se actualizará automáticamente.</small>
+            <span class="kicker">{{ isMyTurn ? 'Tu turno' : `Turno de ${currentPlayer?.name}` }}</span><div class="dice" :class="{ rolling: diceRolling }">{{ diceFace }}</div>
+            <p v-if="room.currentCategory">Última categoría: <strong>{{ room.currentCategory }}</strong></p><button class="primary roll" :disabled="!isMyTurn || diceRolling" @click="rollDice">🎲 Lanzar dado</button><small v-if="!isMyTurn">El tablero se actualizará automáticamente.</small>
           </div>
         </div>
       </section>
-
-      <section class="score-strip">
-        <article v-for="(player, index) in room.players" :key="player.uid" :class="{ active: index === room.currentPlayerIndex }"><span class="avatar small-avatar">{{ initials(player.name) }}</span><div><strong>{{ player.name }}</strong><small>Casilla {{ player.position + 1 }}</small></div><b>{{ player.score }} pts</b></article>
-      </section>
+      <section class="score-strip"><article v-for="(player, index) in room.players" :key="player.uid" :class="{ active: index === room.currentPlayerIndex }"><span class="avatar small-avatar">{{ initials(player.name) }}</span><div><strong>{{ player.name }}</strong><small>Casilla {{ player.position + 1 }}</small></div><b>{{ player.score }} pts</b></article></section>
     </template>
   </main>
 </template>
@@ -71,170 +57,30 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GameBoard from '@/modules/game/board/GameBoard.vue'
 import QuestionCard from './QuestionCard.vue'
+import QuestionMedia from '@/modules/questions/QuestionMedia.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useQuestionsStore } from '@/stores/questionsStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/modules/game/lobby/roomService'
 import { audioService } from '@/modules/game/modes/realtime/audioService'
-import { DEGREE_LABELS, GENERAL_CATEGORIES, MASONIC_CATEGORIES, RITE_LABELS, getQuestionPoints } from '@/modules/questions/questionRules'
+import { DEGREE_LABELS, RITE_LABELS, getCategoriesForRite, getQuestionPoints } from '@/modules/questions/questionRules'
 import type { AnswerMode, Question } from '@/modules/questions/types'
 import type { Player } from '@/modules/game/types'
 import type { RoomPlayer } from '@/modules/game/lobby/types'
 
-const route = useRoute()
-const router = useRouter()
-const authStore = useAuthStore()
-const questionsStore = useQuestionsStore()
-const roomStore = useRoomStore()
-const roomId = computed(() => route.query.room as string | undefined)
-const room = computed(() => roomStore.currentRoom)
-const diceRolling = ref(false)
-const diceResult = ref<number | null>(null)
-const turnMessage = ref('')
-const recentQuestionIds = ref<string[]>([])
-const voiceConnected = ref(false)
-const voiceMuted = ref(false)
-const voiceError = ref('')
-const voiceAvailable = audioService.isConfigured()
+const route=useRoute();const router=useRouter();const authStore=useAuthStore();const questionsStore=useQuestionsStore();const roomStore=useRoomStore();const roomId=computed(()=>route.query.room as string|undefined);const room=computed(()=>roomStore.currentRoom);const diceRolling=ref(false);const diceResult=ref<number|null>(null);const turnMessage=ref('');const recentQuestionIds=ref<string[]>([]);const voiceConnected=ref(false);const voiceMuted=ref(false);const voiceError=ref('');const voiceAvailable=audioService.isConfigured()
+const colors=['#c94f4f','#4f8cc9','#55a56b','#bd8f37','#8e66c2','#4ea5a5','#c56a9c','#8c9a4c'];const categories=computed<string[]>(()=>room.value?getCategoriesForRite(room.value.rite):[]);const riteLabel=computed(()=>room.value?RITE_LABELS[room.value.rite]:'');const levelLabel=computed(()=>room.value?.level==='general'?'General':room.value?.level?DEGREE_LABELS[room.value.level]:'');const currentPlayer=computed(()=>room.value?.players[room.value.currentPlayerIndex]??null);const isMyTurn=computed(()=>currentPlayer.value?.uid===authStore.currentUser?.uid);const isHost=computed(()=>room.value?.hostUid===authStore.currentUser?.uid);const winner=computed(()=>room.value?.players.find(player=>player.uid===room.value?.winnerUid));const sortedByScore=computed(()=>[...(room.value?.players??[])].sort((a,b)=>b.score-a.score));const currentQuestion=computed<Question|null>(()=>{const id=room.value?.currentQuestionId;return id?questionsStore.questions.find(question=>question.id===id)??null:null});const boardPlayers=computed<Player[]>(()=>(room.value?.players??[]).map((player,index)=>({id:player.uid,name:player.name,position:player.position,score:player.score,color:colors[index%colors.length],avatar:initials(player.name),degree:player.degree??undefined})));const diceFaces=['⚀','⚁','⚂','⚃','⚄','⚅'];const diceFace=computed(()=>diceResult.value?diceFaces[diceResult.value-1]:room.value?.lastDice?diceFaces[room.value.lastDice-1]:'⚄')
 
-const colors = ['#c94f4f','#4f8cc9','#55a56b','#bd8f37','#8e66c2','#4ea5a5','#c56a9c','#8c9a4c']
-const categories = computed<string[]>(() => room.value?.rite === 'libre' ? [...GENERAL_CATEGORIES] : [...MASONIC_CATEGORIES])
-const riteLabel = computed(() => room.value ? RITE_LABELS[room.value.rite] : '')
-const levelLabel = computed(() => room.value?.level === 'general' ? 'General' : room.value?.level ? DEGREE_LABELS[room.value.level] : '')
-const currentPlayer = computed(() => room.value?.players[room.value.currentPlayerIndex] ?? null)
-const isMyTurn = computed(() => currentPlayer.value?.uid === authStore.currentUser?.uid)
-const isHost = computed(() => room.value?.hostUid === authStore.currentUser?.uid)
-const winner = computed(() => room.value?.players.find((player) => player.uid === room.value?.winnerUid))
-const sortedByScore = computed(() => [...(room.value?.players ?? [])].sort((a,b) => b.score-a.score))
-const currentQuestion = computed<Question | null>(() => {
-  const id = room.value?.currentQuestionId
-  return id ? questionsStore.questions.find((question) => question.id === id) ?? null : null
-})
-const boardPlayers = computed<Player[]>(() => (room.value?.players ?? []).map((player, index) => ({ id: player.uid, name: player.name, position: player.position, score: player.score, color: colors[index % colors.length], avatar: initials(player.name), degree: player.degree ?? undefined })))
-const diceFaces = ['⚀','⚁','⚂','⚃','⚄','⚅']
-const diceFace = computed(() => diceResult.value ? diceFaces[diceResult.value-1] : room.value?.lastDice ? diceFaces[room.value.lastDice-1] : '⚄')
-
-onMounted(async () => {
-  if (!roomId.value) { router.replace('/lobby'); return }
-  await questionsStore.loadQuestions({ fallbackToDefaults: true })
-  roomStore.watchRoom(roomId.value)
-})
-onBeforeUnmount(() => {
-  roomStore.stop()
-  if (voiceConnected.value) void audioService.leave()
-})
-
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0,2).map((part) => part[0]?.toUpperCase()).join('') || 'J'
-
-const connectVoice = async () => {
-  if (!roomId.value || !authStore.currentUser) return
-  voiceError.value = ''
-  try {
-    await audioService.initialize(`mesa-${roomId.value}`)
-    await audioService.join(authStore.currentUser.uid)
-    await audioService.publishAudio()
-    voiceConnected.value = true
-    voiceMuted.value = false
-  } catch (error) {
-    console.error(error)
-    voiceError.value = error instanceof Error ? error.message : 'No se pudo conectar el audio de la sala.'
-    try { await audioService.leave() } catch { /* no-op */ }
-    voiceConnected.value = false
-  }
-}
-
-const toggleVoice = async () => {
-  if (!voiceConnected.value) return
-  const enabled = voiceMuted.value
-  try {
-    await audioService.toggleAudio(enabled)
-    voiceMuted.value = !enabled
-  } catch (error) {
-    console.error(error)
-    voiceError.value = 'No se pudo cambiar el estado del micrófono.'
-  }
-}
-
-const startGame = async () => {
-  if (!room.value || !isHost.value) return
-  const resetPlayers = room.value.players.map((player) => ({ ...player, position: 0, score: 0 }))
-  await roomService.patchRoom(room.value.id, { status:'playing', players:resetPlayers, currentPlayerIndex:0, currentQuestionId:null, currentCategory:null, lastDice:null, winnerUid:null })
-}
-
-const rollDice = () => {
-  if (!room.value || !isMyTurn.value || diceRolling.value) return
-  diceRolling.value = true
-  let ticks = 0
-  const timer = window.setInterval(() => {
-    diceResult.value = Math.floor(Math.random()*6)+1
-    ticks += 1
-    if (ticks >= 8) {
-      window.clearInterval(timer)
-      diceRolling.value = false
-      void moveAndAsk(diceResult.value || 1)
-    }
-  },70)
-}
-
-const moveAndAsk = async (steps: number) => {
-  if (!room.value || !currentPlayer.value) return
-  const playerIndex = room.value.currentPlayerIndex
-  const players = room.value.players.map((player) => ({ ...player }))
-  const player = players[playerIndex]
-  player.position = Math.min(player.position + steps, room.value.boardSize - 1)
-  const category = categories.value[player.position % categories.value.length]
-  let eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level, category)
-  if (!eligible.length) eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level)
-  if (!eligible.length) {
-    turnMessage.value = 'Esta sala no tiene preguntas compatibles todavía.'
-    await advanceTurn(players)
-    return
-  }
-  const fresh = eligible.filter((question) => !recentQuestionIds.value.includes(question.id))
-  const pool = fresh.length ? fresh : eligible
-  const question = pool[Math.floor(Math.random()*pool.length)]
-  recentQuestionIds.value.push(question.id)
-  if (recentQuestionIds.value.length > 16) recentQuestionIds.value.shift()
-  await roomService.patchRoom(room.value.id, { players, currentQuestionId:question.id, currentCategory:category, lastDice:steps })
-}
-
-const handleResolution = async (resolution: { correct:boolean; mode:AnswerMode }) => {
-  if (!room.value || !currentQuestion.value || !isMyTurn.value) return
-  const players = room.value.players.map((player) => ({ ...player }))
-  const player = players[room.value.currentPlayerIndex]
-  const points = resolution.correct ? getQuestionPoints(currentQuestion.value, resolution.mode) : 0
-  player.score += points
-  turnMessage.value = resolution.correct ? `${player.name}: +${points} puntos.` : `${player.name}: respuesta incorrecta.`
-  if (player.position >= room.value.boardSize - 1) {
-    await roomService.patchRoom(room.value.id, { players, status:'finished', winnerUid:player.uid, currentQuestionId:null })
-    return
-  }
-  await advanceTurn(players)
-}
-
-const handleSkip = async () => {
-  if (!room.value || !isMyTurn.value) return
-  turnMessage.value = 'Pregunta saltada.'
-  await advanceTurn(room.value.players.map((player) => ({ ...player })))
-}
-
-const advanceTurn = async (players: RoomPlayer[]) => {
-  const activeRoom = room.value
-  if (!activeRoom || players.length === 0) return
-  const nextIndex = (activeRoom.currentPlayerIndex + 1) % players.length
-  await roomService.patchRoom(activeRoom.id, { players, currentPlayerIndex:nextIndex, currentQuestionId:null })
-}
-
-const leave = async () => {
-  if (voiceConnected.value) {
-    try { await audioService.leave() } catch (error) { console.warn(error) }
-    voiceConnected.value = false
-  }
-  if (room.value && authStore.currentUser) {
-    try { await roomStore.leaveRoom(room.value.id, authStore.currentUser.uid) } catch (error) { console.warn(error) }
-  }
-  router.push('/lobby')
-}
+onMounted(async()=>{if(!roomId.value){router.replace('/lobby');return}await questionsStore.loadQuestions({fallbackToDefaults:true});roomStore.watchRoom(roomId.value)});onBeforeUnmount(()=>{roomStore.stop();if(voiceConnected.value)void audioService.leave()})
+const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join('')||'J'
+const connectVoice=async()=>{if(!roomId.value||!authStore.currentUser)return;voiceError.value='';try{await audioService.initialize(`mesa-${roomId.value}`);await audioService.join(authStore.currentUser.uid);await audioService.publishAudio();voiceConnected.value=true;voiceMuted.value=false}catch(error){console.error(error);voiceError.value=error instanceof Error?error.message:'No se pudo conectar el audio de la sala.';try{await audioService.leave()}catch{}voiceConnected.value=false}}
+const toggleVoice=async()=>{if(!voiceConnected.value)return;const enabled=voiceMuted.value;try{await audioService.toggleAudio(enabled);voiceMuted.value=!enabled}catch(error){console.error(error);voiceError.value='No se pudo cambiar el estado del micrófono.'}}
+const startGame=async()=>{if(!room.value||!isHost.value)return;const resetPlayers=room.value.players.map(player=>({...player,position:0,score:0}));await roomService.patchRoom(room.value.id,{status:'playing',players:resetPlayers,currentPlayerIndex:0,currentQuestionId:null,currentCategory:null,lastDice:null,winnerUid:null})}
+const rollDice=()=>{if(!room.value||!isMyTurn.value||diceRolling.value)return;diceRolling.value=true;let ticks=0;const timer=window.setInterval(()=>{diceResult.value=Math.floor(Math.random()*6)+1;ticks+=1;if(ticks>=8){window.clearInterval(timer);diceRolling.value=false;void moveAndAsk(diceResult.value||1)}},70)}
+const moveAndAsk=async(steps:number)=>{if(!room.value||!currentPlayer.value||!categories.value.length)return;const playerIndex=room.value.currentPlayerIndex;const players=room.value.players.map(player=>({...player}));const player=players[playerIndex];player.position=Math.min(player.position+steps,room.value.boardSize-1);const category=categories.value[player.position%categories.value.length];let eligible=questionsStore.getQuestionsForRoom(room.value.rite,room.value.level,category,'board');if(!eligible.length)eligible=questionsStore.getQuestionsForRoom(room.value.rite,room.value.level,undefined,'board');if(!eligible.length){turnMessage.value='Esta sala no tiene preguntas compatibles todavía.';await advanceTurn(players);return}const fresh=eligible.filter(question=>!recentQuestionIds.value.includes(question.id));const pool=fresh.length?fresh:eligible;const question=pool[Math.floor(Math.random()*pool.length)];recentQuestionIds.value.push(question.id);if(recentQuestionIds.value.length>16)recentQuestionIds.value.shift();await roomService.patchRoom(room.value.id,{players,currentQuestionId:question.id,currentCategory:category,lastDice:steps})}
+const handleResolution=async(resolution:{correct:boolean;mode:AnswerMode})=>{if(!room.value||!currentQuestion.value||!isMyTurn.value)return;const players=room.value.players.map(player=>({...player}));const player=players[room.value.currentPlayerIndex];const points=resolution.correct?getQuestionPoints(currentQuestion.value,resolution.mode):0;player.score+=points;turnMessage.value=resolution.correct?`${player.name}: +${points} puntos.`:`${player.name}: respuesta incorrecta.`;if(player.position>=room.value.boardSize-1){await roomService.patchRoom(room.value.id,{players,status:'finished',winnerUid:player.uid,currentQuestionId:null});return}await advanceTurn(players)}
+const handleSkip=async()=>{if(!room.value||!isMyTurn.value)return;turnMessage.value='Pregunta saltada.';await advanceTurn(room.value.players.map(player=>({...player})))};const advanceTurn=async(players:RoomPlayer[])=>{const activeRoom=room.value;if(!activeRoom||!players.length)return;const nextIndex=(activeRoom.currentPlayerIndex+1)%players.length;await roomService.patchRoom(activeRoom.id,{players,currentPlayerIndex:nextIndex,currentQuestionId:null})}
+const leave=async()=>{if(voiceConnected.value){try{await audioService.leave()}catch(error){console.warn(error)}voiceConnected.value=false}if(room.value&&authStore.currentUser){try{await roomStore.leaveRoom(room.value.id,authStore.currentUser.uid)}catch(error){console.warn(error)}}router.push('/lobby')}
 </script>
 
 <style scoped>
