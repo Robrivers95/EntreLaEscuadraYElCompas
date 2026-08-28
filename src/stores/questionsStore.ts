@@ -7,8 +7,9 @@ import { REAA_LITURGICAL_QUESTIONS } from '@/modules/questions/reaaLiturgicalQue
 import { REAA_NUEVO_LEON_QUESTIONS } from '@/modules/questions/reaaNuevoLeonQuestions'
 import { OTHER_RITE_STARTER_QUESTIONS } from '@/modules/questions/otherRiteQuestions'
 import { FREE_GENERAL_QUESTIONS } from '@/modules/questions/freeGeneralQuestions'
-import { getQuestionRite, isQuestionAllowedForDegree, normalizeAnswer } from '@/modules/questions/questionRules'
-import type { MasonicDegree, MasonicRite, Question, QuestionDifficulty } from '@/modules/questions/types'
+import { KABBALAH_QUESTIONS } from '@/modules/questions/kabbalahQuestions'
+import { getQuestionRite, isOpenKnowledgeBank, isQuestionAllowedForDegree, normalizeAnswer, questionSupportsMode } from '@/modules/questions/questionRules'
+import type { MasonicDegree, MasonicRite, Question, QuestionDifficulty, QuestionGameMode } from '@/modules/questions/types'
 
 interface LoadQuestionsOptions {
   force?: boolean
@@ -19,6 +20,7 @@ export const STARTER_QUESTIONS = [
   ...REAA_LITURGICAL_QUESTIONS,
   ...REAA_NUEVO_LEON_QUESTIONS,
   ...OTHER_RITE_STARTER_QUESTIONS,
+  ...KABBALAH_QUESTIONS,
   ...FREE_GENERAL_QUESTIONS,
   ...DEFAULT_QUESTIONS,
   ...LEGACY_STARTER_QUESTIONS,
@@ -58,7 +60,6 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const loadQuestions = async (options: LoadQuestionsOptions = {}) => {
     const { force = false, fallbackToDefaults = true } = options
-
     if (loaded.value && !force) {
       if (fallbackToDefaults && questions.value.length === 0) useDefaults()
       return
@@ -92,8 +93,10 @@ export const useQuestionsStore = defineStore('questions', () => {
     category: string,
     degree: MasonicDegree,
     rite: MasonicRite = 'reaa',
+    gameMode: QuestionGameMode = 'board',
   ): Question[] => questions.value.filter(
     (question) =>
+      questionSupportsMode(question, gameMode) &&
       question.category === category &&
       getQuestionRite(question) === rite &&
       isQuestionAllowedForDegree(question.difficulty, degree),
@@ -103,16 +106,21 @@ export const useQuestionsStore = defineStore('questions', () => {
     rite: MasonicRite,
     level: QuestionDifficulty,
     category?: string,
+    gameMode: QuestionGameMode = 'board',
   ): Question[] => questions.value.filter((question) => {
+    if (!questionSupportsMode(question, gameMode)) return false
     if (getQuestionRite(question) !== rite) return false
     if (category && question.category !== category) return false
-    if (rite === 'libre') return question.difficulty === 'general'
+    if (isOpenKnowledgeBank(rite)) return question.difficulty === 'general'
     if (level === 'general') return false
     return isQuestionAllowedForDegree(question.difficulty, level)
   })
 
   const countForRite = (rite: MasonicRite) =>
     questions.value.filter((question) => getQuestionRite(question) === rite).length
+
+  const countForMode = (mode: QuestionGameMode) =>
+    questions.value.filter((question) => questionSupportsMode(question, mode)).length
 
   const setQuestions = (newQuestions: Question[]) => { questions.value = newQuestions }
   const addQuestion = (question: Question) => { questions.value.push(question) }
@@ -134,6 +142,7 @@ export const useQuestionsStore = defineStore('questions', () => {
     getEligibleQuestions,
     getQuestionsForRoom,
     countForRite,
+    countForMode,
     setQuestions,
     addQuestion,
     updateQuestion,
