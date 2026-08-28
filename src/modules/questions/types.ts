@@ -25,6 +25,10 @@ export interface Question {
   enabled?: boolean
   /** Etiquetas libres para búsqueda y organización administrativa. */
   tags?: string[]
+  /** Imagen opcional compartida por tablero, 1vs1 y estudio. Puede ser /public o Firebase Storage. */
+  imageUrl?: string
+  imageAlt?: string
+  imageStoragePath?: string
   createdAt?: number
   updatedAt?: number
 }
