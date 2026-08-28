@@ -1,12 +1,21 @@
 import type { MasonicDegree, MasonicRite } from '@/modules/questions/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
 
+export const ROOM_TOTAL_CAPACITY = 20
+
 export interface RoomPlayer {
   uid: string
   name: string
   degree: MasonicDegree | null
   position: number
   score: number
+  joinedAt: number
+}
+
+export interface RoomGuest {
+  uid: string
+  name: string
+  degree: MasonicDegree | null
   joinedAt: number
 }
 
@@ -19,8 +28,14 @@ export interface BoardRoom {
   level: RoomLevel
   boardSize: number
   maxPlayers: number
+  maxAttendees: number
   players: RoomPlayer[]
   playerIds: string[]
+  guests: RoomGuest[]
+  guestIds: string[]
+  bannedIds: string[]
+  isPrivate: boolean
+  isLocked: boolean
   status: 'waiting' | 'playing' | 'finished'
   currentPlayerIndex: number
   currentQuestionId?: string | null
@@ -40,4 +55,5 @@ export interface CreateBoardRoomInput {
   level: RoomLevel
   boardSize: number
   maxPlayers: number
+  isPrivate?: boolean
 }
