@@ -4,6 +4,7 @@ import path from 'node:path'
 const ROOT = process.cwd()
 const ENV_PATH = path.join(ROOT, '.env.local')
 const LIVE_URL = process.env.VOICE_SOURCE_URL || 'https://juegodemesamasonico.web.app/'
+const REQUIRE_VOICE = process.argv.includes('--require')
 const APP_ID_RE = /\b[a-f0-9]{32}\b/gi
 const ASSET_RE = /["'`](\/assets\/[^"'`?#]+\.js(?:\?[^"'`]*)?)["'`]/g
 const ANCHORS = [
@@ -97,24 +98,35 @@ async function recoverFromPublishedBuild() {
   return ranked[0][0]
 }
 
+function failOrWarn(message) {
+  if (REQUIRE_VOICE) {
+    console.error(`✗ ${message}`)
+    process.exitCode = 2
+  } else {
+    console.warn(`⚠ ${message}`)
+  }
+}
+
 async function main() {
   const envText = await readEnv()
   const existing = getEnvValue(envText, 'VITE_AGORA_APP_ID')
   if (isRealAppId(existing)) {
     console.log('✓ Voz protegida: se conserva la configuración Agora existente.')
-    return
+    return true
   }
 
   try {
     const recovered = await recoverFromPublishedBuild()
     if (!recovered) {
-      console.warn('⚠ No se pudo recuperar automáticamente la configuración Agora del sitio publicado. El build puede continuar, pero no se debe desplegar sobre producción hasta conservar la voz existente.')
-      return
+      failOrWarn('No se pudo recuperar automáticamente la configuración Agora del sitio publicado. Producción queda protegida y no debe reemplazarse sin voz.')
+      return false
     }
     await saveAppId(envText, recovered)
     console.log('✓ Voz protegida: configuración Agora recuperada de la versión publicada y guardada en .env.local.')
+    return true
   } catch (error) {
-    console.warn(`⚠ No se pudo consultar la versión publicada para preservar Agora: ${error instanceof Error ? error.message : String(error)}`)
+    failOrWarn(`No se pudo consultar la versión publicada para preservar Agora: ${error instanceof Error ? error.message : String(error)}`)
+    return false
   }
 }
 
