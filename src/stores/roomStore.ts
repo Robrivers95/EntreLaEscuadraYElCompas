@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { roomService } from '@/modules/game/lobby/roomService'
-import type { BoardRoom, CreateBoardRoomInput, RoomPlayer } from '@/modules/game/lobby/types'
+import type { BoardRoom, CreateBoardRoomInput, RoomGuest, RoomPlayer } from '@/modules/game/lobby/types'
 
 export const useRoomStore = defineStore('rooms', () => {
   const rooms = ref<BoardRoom[]>([])
@@ -44,7 +44,10 @@ export const useRoomStore = defineStore('rooms', () => {
   }
 
   const joinRoom = async (roomId: string, player: RoomPlayer) => roomService.joinRoom(roomId, player)
+  const joinGuest = async (roomId: string, guest: RoomGuest) => roomService.joinGuest(roomId, guest)
   const leaveRoom = async (roomId: string, uid: string) => roomService.leaveRoom(roomId, uid)
+  const kickMember = async (roomId: string, hostUid: string, targetUid: string) => roomService.kickMember(roomId, hostUid, targetUid)
+  const setRoomAccess = async (roomId: string, settings: { isPrivate?: boolean; isLocked?: boolean }) => roomService.setRoomAccess(roomId, settings)
 
   const stop = () => {
     unsubscribeRooms?.()
@@ -53,5 +56,20 @@ export const useRoomStore = defineStore('rooms', () => {
     unsubscribeCurrent = null
   }
 
-  return { rooms, openRooms, currentRoom, loading, error, watchRooms, watchRoom, createRoom, joinRoom, leaveRoom, stop }
+  return {
+    rooms,
+    openRooms,
+    currentRoom,
+    loading,
+    error,
+    watchRooms,
+    watchRoom,
+    createRoom,
+    joinRoom,
+    joinGuest,
+    leaveRoom,
+    kickMember,
+    setRoomAccess,
+    stop,
+  }
 })
