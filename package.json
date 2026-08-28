@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "voice:preserve": "node scripts/preserve-voice-config.mjs",
+    "build": "node scripts/preserve-voice-config.mjs && vue-tsc && vite build",
     "preview": "vite preview",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
