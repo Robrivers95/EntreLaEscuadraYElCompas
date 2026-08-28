@@ -2,7 +2,7 @@
   <main class="reteje-view">
     <section class="exam-shell">
       <header class="exam-header"><MasonicSeal :size="112" /><div><span class="eyebrow">Examen de acceso del juego</span><h1>{{ riteLabel }}</h1><p>Este cuestionario usa conocimiento público. No solicita palabras, signos, toques ni datos reservados de reconocimiento.</p></div></header>
-      <div v-if="finished" class="result" :class="{pass:passed,fail:!passed}"><div class="result-score">{{ score }}/{{ exam.length }}</div><h2>{{ passed?'Acceso aprobado':'No aprobaste el reteje del juego' }}</h2><p v-if="passed">Tu acceso a {{ riteLabel }} quedó registrado para el nivel {{ levelLabel }}.</p><p v-else>No puedes entrar a esa sala o banco todavía. Puedes volver al lobby o intentar nuevamente.</p><div class="result-actions"><button v-if="!passed" class="btn-primary" @click="restart">Intentar de nuevo</button><button class="btn-secondary" @click="router.push('/lobby')">Volver al lobby</button></div></div>
+      <div v-if="finished" class="result" :class="{pass:passed,fail:!passed}"><div class="result-score">{{ score }}/{{ exam.length }}</div><h2>{{ passed?'Acceso aprobado':'No aprobaste el reteje del juego' }}</h2><p v-if="passed">Tu acceso a {{ riteLabel }} quedó registrado para el nivel {{ levelLabel }}. Entrarás como {{ requestedRole === 'guest' ? 'invitado' : 'jugador' }}.</p><p v-else>No puedes entrar a esa sala o banco todavía. Puedes volver al lobby o intentar nuevamente.</p><div class="result-actions"><button v-if="!passed" class="btn-primary" @click="restart">Intentar de nuevo</button><button class="btn-secondary" @click="router.push('/lobby')">Volver al lobby</button></div></div>
       <form v-else class="exam-card" @submit.prevent="submitExam"><div class="progress"><span :style="{width:`${answeredPercent}%`}"></span></div><article v-for="(question,index) in exam" :key="question.id" class="exam-question"><div class="question-number">{{ index+1 }}</div><div class="question-body"><h3>{{ question.text }}</h3><label v-for="(option,optionIndex) in question.options" :key="option" class="exam-option"><input v-model="answers[index]" type="radio" :name="question.id" :value="optionIndex" /><span class="letter">{{ String.fromCharCode(65+optionIndex) }}</span><span>{{ option }}</span></label></div></article><button class="btn-primary submit" :disabled="answers.some(answer=>answer===null)">Calificar reteje</button></form>
       <aside class="notice"><strong>Importante:</strong> este examen sólo controla acceso dentro del juego. No sustituye un reteje oficial ni acredita grado, regularidad o pertenencia masónica.</aside>
     </section>
@@ -12,11 +12,47 @@
 <script setup lang="ts">
 import { computed,onMounted,ref } from 'vue'
 import { useRoute,useRouter } from 'vue-router'
-import MasonicSeal from '@/shared/MasonicSeal.vue';import { useAuthStore } from '@/stores/authStore';import { useAccessStore } from '@/stores/accessStore';import { useRoomStore } from '@/stores/roomStore';import { RITE_EXAMS } from '@/modules/game/access/riteAccess';import type { RiteExamQuestion,RoomLevel } from '@/modules/game/access/riteAccess';import { RITE_LABELS } from '@/modules/questions/questionRules';import type { MasonicRite } from '@/modules/questions/types'
+import MasonicSeal from '@/shared/MasonicSeal.vue'
+import { useAuthStore } from '@/stores/authStore'
+import { useAccessStore } from '@/stores/accessStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { RITE_EXAMS } from '@/modules/game/access/riteAccess'
+import type { RiteExamQuestion,RoomLevel } from '@/modules/game/access/riteAccess'
+import { RITE_LABELS } from '@/modules/questions/questionRules'
+import type { MasonicRite } from '@/modules/questions/types'
+
 type ExamRite=Exclude<MasonicRite,'libre'|'kabala'|'otro'>
-const route=useRoute(),router=useRouter(),authStore=useAuthStore(),accessStore=useAccessStore(),roomStore=useRoomStore();const rite=computed<MasonicRite>(()=>(route.query.rite as MasonicRite)||'reaa');const level=computed<RoomLevel>(()=>(route.query.level as RoomLevel)||'aprendiz');const riteLabel=computed(()=>RITE_LABELS[rite.value]||'Rito');const levelLabel=computed(()=>level.value==='general'?'General':level.value[0].toUpperCase()+level.value.slice(1));const exam=ref<RiteExamQuestion[]>([]),answers=ref<Array<number|null>>([]),finished=ref(false),score=ref(0);const passed=computed(()=>score.value>=Math.ceil(exam.value.length*.8));const answeredPercent=computed(()=>exam.value.length?answers.value.filter(a=>a!==null).length/exam.value.length*100:0);const shuffle=<T,>(items:T[])=>[...items].sort(()=>Math.random()-.5)
-const loadExam=()=>{if(rite.value==='libre'||rite.value==='kabala'||rite.value==='otro'){router.replace('/lobby');return}const bank=RITE_EXAMS[rite.value as ExamRite];exam.value=shuffle(bank).slice(0,5);answers.value=exam.value.map(()=>null)};onMounted(loadExam);const restart=()=>{finished.value=false;score.value=0;loadExam()}
-const submitExam=async()=>{score.value=exam.value.reduce((total,q,index)=>total+(answers.value[index]===q.correctAnswer?1:0),0);finished.value=true;if(!passed.value||!authStore.currentUser)return;await accessStore.certify(authStore.currentUser.uid,rite.value,level.value,score.value);const roomId=route.query.room as string|undefined;if(roomId&&authStore.profile){try{await roomStore.joinRoom(roomId,{uid:authStore.currentUser.uid,name:authStore.profile.name,degree:authStore.masonicDegree,position:0,score:0,joinedAt:Date.now()});window.setTimeout(()=>router.push(`/game/turns?room=${roomId}`),500);return}catch(error){console.error(error)}}const returnTo=route.query.returnTo as string|undefined;if(returnTo?.startsWith('/'))window.setTimeout(()=>router.push(returnTo),500)}
+const route=useRoute(),router=useRouter(),authStore=useAuthStore(),accessStore=useAccessStore(),roomStore=useRoomStore()
+const rite=computed<MasonicRite>(()=>(route.query.rite as MasonicRite)||'reaa')
+const level=computed<RoomLevel>(()=>(route.query.level as RoomLevel)||'aprendiz')
+const requestedRole=computed<'player'|'guest'>(()=>route.query.role==='guest'?'guest':'player')
+const riteLabel=computed(()=>RITE_LABELS[rite.value]||'Rito')
+const levelLabel=computed(()=>level.value==='general'?'General':level.value[0].toUpperCase()+level.value.slice(1))
+const exam=ref<RiteExamQuestion[]>([]),answers=ref<Array<number|null>>([]),finished=ref(false),score=ref(0)
+const passed=computed(()=>score.value>=Math.ceil(exam.value.length*.8))
+const answeredPercent=computed(()=>exam.value.length?answers.value.filter(a=>a!==null).length/exam.value.length*100:0)
+const shuffle=<T,>(items:T[])=>[...items].sort(()=>Math.random()-.5)
+const loadExam=()=>{if(rite.value==='libre'||rite.value==='kabala'||rite.value==='otro'){router.replace('/lobby');return}const bank=RITE_EXAMS[rite.value as ExamRite];exam.value=shuffle(bank).slice(0,5);answers.value=exam.value.map(()=>null)}
+onMounted(loadExam)
+const restart=()=>{finished.value=false;score.value=0;loadExam()}
+const submitExam=async()=>{
+  score.value=exam.value.reduce((total,q,index)=>total+(answers.value[index]===q.correctAnswer?1:0),0)
+  finished.value=true
+  if(!passed.value||!authStore.currentUser)return
+  await accessStore.certify(authStore.currentUser.uid,rite.value,level.value,score.value)
+  const roomId=route.query.room as string|undefined
+  if(roomId&&authStore.profile){
+    try{
+      const base={uid:authStore.currentUser.uid,name:authStore.profile.name,degree:authStore.masonicDegree,joinedAt:Date.now()}
+      if(requestedRole.value==='guest')await roomStore.joinGuest(roomId,base)
+      else await roomStore.joinRoom(roomId,{...base,position:0,score:0})
+      window.setTimeout(()=>router.push(`/game/turns?room=${roomId}`),500)
+      return
+    }catch(error){console.error(error)}
+  }
+  const returnTo=route.query.returnTo as string|undefined
+  if(returnTo?.startsWith('/'))window.setTimeout(()=>router.push(returnTo),500)
+}
 </script>
 
 <style scoped>
