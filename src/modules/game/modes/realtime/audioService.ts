@@ -208,7 +208,6 @@ export class AudioService {
       if (!audio) {
         audio = document.createElement('audio')
         audio.autoplay = true
-        audio.playsInline = true
         audio.setAttribute('data-voice-peer', peerUid)
         audio.style.display = 'none'
         document.body.appendChild(audio)
