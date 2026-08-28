@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 900" role="img" aria-labelledby="title desc">
+  <title id="title">Árbol de la Vida</title><desc id="desc">Diagrama ornamental original de diez nodos conectados para preguntas introductorias de Kabbalah.</desc>
+  <defs><radialGradient id="bg" cx="50%" cy="35%"><stop offset="0" stop-color="#173b55"/><stop offset="1" stop-color="#07111b"/></radialGradient><filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <rect width="720" height="900" rx="34" fill="url(#bg)"/>
+  <g stroke="#d7bd69" stroke-width="5" opacity=".68" fill="none">
+    <path d="M360 90 210 240M360 90 510 240M210 240 360 360M510 240 360 360M210 240 175 430M510 240 545 430M360 360 175 430M360 360 545 430M175 430 360 535M545 430 360 535M175 430 220 630M545 430 500 630M360 535 220 630M360 535 500 630M220 630 360 730M500 630 360 730M360 730 360 825"/>
+  </g>
+  <g fill="#0b1a28" stroke="#ead484" stroke-width="7" filter="url(#glow)">
+    <circle cx="360" cy="90" r="40"/><circle cx="210" cy="240" r="40"/><circle cx="510" cy="240" r="40"/><circle cx="360" cy="360" r="40"/><circle cx="175" cy="430" r="40"/><circle cx="545" cy="430" r="40"/><circle cx="360" cy="535" r="40"/><circle cx="220" cy="630" r="40"/><circle cx="500" cy="630" r="40"/><circle cx="360" cy="730" r="40"/><circle cx="360" cy="825" r="40"/>
+  </g>
+  <g fill="#ead484" font-family="Georgia,serif" text-anchor="middle"><text x="360" y="45" font-size="24">ÁRBOL DE LA VIDA</text><text x="360" y="875" font-size="18" opacity=".75">DIEZ SEFIROT · DIAGRAMA DE ESTUDIO</text></g>
+</svg>
