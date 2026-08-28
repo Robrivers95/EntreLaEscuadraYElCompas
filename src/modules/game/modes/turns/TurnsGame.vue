@@ -5,7 +5,11 @@
       <div class="room-title">
         <span>{{ riteLabel }}</span>
         <h1>{{ room.name }}</h1>
-        <p>{{ room.rite === 'kabala' ? '10 sefirot · ascenso por respuestas correctas' : `${room.boardSize} casillas · ${levelLabel}` }} · {{ room.players.length }}/{{ room.maxPlayers }} jugadores</p>
+        <p>
+          {{ room.rite === 'kabala' ? '10 sefirot · ascenso por respuestas correctas' : `${room.boardSize} casillas · ${levelLabel}` }}
+          · {{ room.players.length }} jugadores · {{ totalPeople }}/{{ room.maxAttendees }} personas
+          <b v-if="room.isPrivate">· PRIVADA</b><b v-if="room.isLocked"> · CERRADA</b>
+        </p>
       </div>
       <div class="header-actions">
         <div class="turn-box">
@@ -13,9 +17,10 @@
           <strong>{{ currentPlayer?.name || '—' }}</strong>
           <em v-if="room.status === 'playing'">Lee: {{ readerPlayer?.name || '—' }}</em>
         </div>
-        <button v-if="voiceAvailable" class="voice-btn" :class="{ connected: voiceConnected, muted: voiceMuted }" @click="voiceConnected ? toggleVoice() : connectVoice()">
+        <button v-if="isActivePlayer && voiceAvailable" class="voice-btn" :class="{ connected: voiceConnected, muted: voiceMuted }" @click="voiceConnected ? toggleVoice() : connectVoice()">
           {{ !voiceConnected ? '🎙 Conectar voz' : voiceMuted ? '🔇 Activar micrófono' : '🎤 Silenciar' }}
         </button>
+        <span v-else-if="isGuest" class="guest-voice">👁 Invitado · sólo chat</span>
       </div>
     </header>
 
@@ -30,15 +35,17 @@
       <div class="players-waiting">
         <div v-for="player in room.players" :key="player.uid" class="waiting-player">
           <span class="avatar">{{ initials(player.name) }}</span>
-          <div><strong>{{ player.name }}</strong><small>{{ player.degree ? DEGREE_LABELS[player.degree] : 'Acceso libre' }}</small></div>
-          <em v-if="player.uid === room.hostUid">Anfitrión</em>
+          <div><strong>{{ player.name }}</strong><small>{{ player.degree ? DEGREE_LABELS[player.degree] : 'Acceso libre' }} · jugador</small></div>
+          <em v-if="player.uid === room.hostUid">Líder</em>
         </div>
       </div>
+      <p v-if="room.guests.length" class="guest-count">👁 {{ room.guests.length }} invitado{{ room.guests.length === 1 ? '' : 's' }} mirando y usando el chat.</p>
       <div class="waiting-actions">
         <button v-if="isHost" class="primary" :disabled="room.players.length < 2" @click="startGame">
           {{ room.players.length < 2 ? 'Falta otro jugador' : 'Iniciar partida' }}
         </button>
-        <span v-else>El anfitrión iniciará la partida.</span>
+        <span v-else-if="isActivePlayer">El líder iniciará la partida.</span>
+        <span v-else>Estás observando como invitado.</span>
       </div>
     </section>
 
@@ -104,7 +111,8 @@
               <div v-for="(option, optionIndex) in currentQuestion.options" :key="optionIndex" class="readonly-option">
                 <b>{{ String.fromCharCode(65 + optionIndex) }}</b><span>{{ option }}</span>
               </div>
-              <p>Puedes seguir la pregunta y los incisos, pero sólo {{ readerPlayer?.name }} ve la clave y puede registrar el resultado.</p>
+              <p v-if="isGuest">Estás como invitado: puedes seguir la pregunta y escribir en el chat, pero no controlar el turno.</p>
+              <p v-else>Puedes seguir la pregunta y los incisos, pero sólo {{ readerPlayer?.name }} ve la clave y puede registrar el resultado.</p>
             </div>
           </template>
 
@@ -124,6 +132,7 @@
               <p v-if="room.currentCategory">Última categoría: <strong>{{ room.currentCategory }}</strong></p>
               <button v-if="isReader" class="primary roll" :disabled="diceRolling" @click="rollDice">🎲 Lanzar dado</button>
               <small v-else-if="isMyTurn">{{ readerPlayer?.name }} lanzará el dado y leerá tu pregunta.</small>
+              <small v-else-if="isGuest">Miras la partida como invitado.</small>
               <small v-else>Sólo {{ readerPlayer?.name }} controla este turno.</small>
             </div>
           </template>
@@ -138,20 +147,30 @@
         </article>
       </section>
     </template>
+
+    <RoomSocialPanel
+      v-if="room && isRoomMember && currentUid"
+      :room="room"
+      :current-uid="currentUid"
+      :current-name="currentName"
+      :is-host="isHost"
+    />
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GameBoard from '@/modules/game/board/GameBoard.vue'
 import QuestionCard from './QuestionCard.vue'
 import QuestionMedia from '@/modules/questions/QuestionMedia.vue'
+import RoomSocialPanel from '@/modules/social/RoomSocialPanel.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useQuestionsStore } from '@/stores/questionsStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/modules/game/lobby/roomService'
 import { audioService } from '@/modules/game/modes/realtime/audioService'
+import { gameSounds } from '@/modules/game/soundService'
 import { DEGREE_LABELS, RITE_LABELS, getCategoriesForRite, getQuestionPoints } from '@/modules/questions/questionRules'
 import type { AnswerMode, Question } from '@/modules/questions/types'
 import type { Player } from '@/modules/game/types'
@@ -175,17 +194,25 @@ const voiceConnected = ref(false)
 const voiceMuted = ref(false)
 const voiceError = ref('')
 const voiceAvailable = audioService.isConfigured()
+const positionsInitialized = ref(false)
+const lastPositions = new Map<string, number>()
 
 const colors = ['#c94f4f', '#4f8cc9', '#55a56b', '#bd8f37', '#8e66c2', '#4ea5a5', '#c56a9c', '#8c9a4c']
+const currentUid = computed(() => authStore.currentUser?.uid || '')
+const currentName = computed(() => authStore.profile?.name || 'Jugador')
 const categories = computed<string[]>(() => room.value ? getCategoriesForRite(room.value.rite) : [])
 const riteLabel = computed(() => room.value ? RITE_LABELS[room.value.rite] : '')
 const levelLabel = computed(() => room.value?.level === 'general' ? 'General' : room.value?.level ? DEGREE_LABELS[room.value.level] : '')
+const totalPeople = computed(() => (room.value?.players.length || 0) + (room.value?.guests.length || 0))
+const isActivePlayer = computed(() => Boolean(room.value && currentUid.value && room.value.playerIds.includes(currentUid.value)))
+const isGuest = computed(() => Boolean(room.value && currentUid.value && room.value.guestIds.includes(currentUid.value) && !room.value.playerIds.includes(currentUid.value)))
+const isRoomMember = computed(() => isActivePlayer.value || isGuest.value)
 const currentPlayer = computed(() => room.value?.players[room.value.currentPlayerIndex] ?? null)
 const readerIndex = computed(() => room.value?.players.length ? (room.value.currentPlayerIndex + 1) % room.value.players.length : 0)
 const readerPlayer = computed(() => room.value?.players[readerIndex.value] ?? null)
-const isMyTurn = computed(() => currentPlayer.value?.uid === authStore.currentUser?.uid)
-const isReader = computed(() => readerPlayer.value?.uid === authStore.currentUser?.uid)
-const isHost = computed(() => room.value?.hostUid === authStore.currentUser?.uid)
+const isMyTurn = computed(() => isActivePlayer.value && currentPlayer.value?.uid === currentUid.value)
+const isReader = computed(() => isActivePlayer.value && readerPlayer.value?.uid === currentUid.value)
+const isHost = computed(() => room.value?.hostUid === currentUid.value)
 const winner = computed(() => room.value?.players.find((player) => player.uid === room.value?.winnerUid))
 const sortedByScore = computed(() => [...(room.value?.players ?? [])].sort((a, b) => b.score - a.score))
 const currentQuestion = computed<Question | null>(() => {
@@ -219,6 +246,36 @@ onBeforeUnmount(() => {
   if (voiceConnected.value) void audioService.leave()
 })
 
+watch(() => room.value?.players.map((player) => `${player.uid}:${player.position}`).join('|'), () => {
+  if (!room.value) return
+  if (!positionsInitialized.value) {
+    room.value.players.forEach((player) => lastPositions.set(player.uid, player.position))
+    positionsInitialized.value = true
+    return
+  }
+  let advanced = false
+  room.value.players.forEach((player) => {
+    const previous = lastPositions.get(player.uid)
+    if (typeof previous === 'number' && player.position > previous) advanced = true
+    lastPositions.set(player.uid, player.position)
+  })
+  if (advanced) gameSounds.advance()
+})
+
+watch(() => room.value?.lastDice, (value, oldValue) => {
+  if (value && value !== oldValue) gameSounds.diceLand()
+})
+
+watch(room, (next, previous) => {
+  if (!next || !previous || !currentUid.value) return
+  const wasMember = previous.playerIds.includes(currentUid.value) || previous.guestIds.includes(currentUid.value)
+  const stillMember = next.playerIds.includes(currentUid.value) || next.guestIds.includes(currentUid.value)
+  if (wasMember && !stillMember) {
+    if (voiceConnected.value) void audioService.leave()
+    router.replace('/lobby')
+  }
+})
+
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'J'
 
 const playerPositionLabel = (position: number) => {
@@ -227,7 +284,7 @@ const playerPositionLabel = (position: number) => {
 }
 
 const connectVoice = async () => {
-  if (!roomId.value || !authStore.currentUser) return
+  if (!roomId.value || !authStore.currentUser || !isActivePlayer.value) return
   voiceError.value = ''
   try {
     await audioService.initialize(`mesa-${roomId.value}`)
@@ -244,7 +301,7 @@ const connectVoice = async () => {
 }
 
 const toggleVoice = async () => {
-  if (!voiceConnected.value) return
+  if (!voiceConnected.value || !isActivePlayer.value) return
   const enabled = voiceMuted.value
   try {
     await audioService.toggleAudio(enabled)
@@ -294,6 +351,7 @@ const rollDice = () => {
   let ticks = 0
   const timer = window.setInterval(() => {
     diceResult.value = Math.floor(Math.random() * 6) + 1
+    gameSounds.diceTick()
     ticks += 1
     if (ticks >= 8) {
       window.clearInterval(timer)
@@ -341,6 +399,7 @@ const handleResolution = async (resolution: { correct: boolean; mode: AnswerMode
   const player = players[room.value.currentPlayerIndex]
   const points = resolution.correct ? getQuestionPoints(currentQuestion.value, resolution.mode) : 0
   player.score += points
+  resolution.correct ? gameSounds.correct() : gameSounds.incorrect()
 
   if (room.value.rite === 'kabala') {
     if (resolution.correct) player.position = Math.min(player.position + 1, 9)
@@ -397,7 +456,7 @@ const leave = async () => {
     try { await audioService.leave() } catch (error) { console.warn(error) }
     voiceConnected.value = false
   }
-  if (room.value && authStore.currentUser) {
+  if (room.value && authStore.currentUser && isRoomMember.value) {
     try { await roomStore.leaveRoom(room.value.id, authStore.currentUser.uid) } catch (error) { console.warn(error) }
   }
   router.push('/lobby')
@@ -405,7 +464,6 @@ const leave = async () => {
 </script>
 
 <style scoped>
-.turns-game{min-height:100vh;padding:18px 18px 70px;background:radial-gradient(circle at 50% -10%,rgba(37,75,117,.34),transparent 38%),#050a11;color:#eee0c2}.game-header{max-width:1320px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding-bottom:15px;border-bottom:1px solid rgba(214,183,95,.23)}.back{border:1px solid rgba(214,183,95,.3);background:transparent;color:#d9c17a;padding:9px 12px;border-radius:9px}.room-title>span,.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:#c6a44d}.room-title h1{margin:1px 0;color:#f0d992;font:700 30px Georgia}.room-title p{margin:0;color:rgba(238,224,194,.5)}.header-actions{display:flex;gap:10px;align-items:center}.turn-box{display:flex;flex-direction:column;text-align:right}.turn-box strong{color:#efdba7}.turn-box em{font-style:normal;font-size:9px;color:#84c9a5}.voice-btn{border:1px solid rgba(214,183,95,.35);border-radius:9px;padding:10px 12px;background:rgba(214,183,95,.06);color:#e0cb91;font-weight:800}.voice-btn.connected{border-color:rgba(73,164,103,.55);color:#9ad9ab}.voice-btn.muted{border-color:rgba(190,86,78,.55);color:#e5a19c}.voice-error{max-width:1320px;margin:9px auto;padding:9px 12px;border-left:3px solid #b34f4a;background:rgba(179,79,74,.09);color:#e6aaa6;font-size:11px}.state-panel,.waiting-panel,.finished-panel{max-width:760px;margin:50px auto;text-align:center;padding:35px;border:1px solid rgba(214,183,95,.25);border-radius:18px;background:rgba(8,22,36,.88)}.seal-line{font:700 28px Georgia;color:#c7aa57}.waiting-panel h2,.finished-panel h2{color:#efdb9a;font-family:Georgia,serif}.waiting-panel>p,.finished-panel>p{color:rgba(238,224,194,.57)}.players-waiting{display:grid;gap:8px;margin:20px 0}.waiting-player{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid rgba(214,183,95,.15);border-radius:10px;text-align:left}.waiting-player div{display:flex;flex:1;flex-direction:column}.waiting-player em{font-size:10px;color:#d2b863}.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c9a84c,#604817);color:#08111b;font-weight:900}.waiting-actions{display:flex;justify-content:center}.primary{border:0;border-radius:9px;padding:11px 15px;background:linear-gradient(135deg,#e1c36c,#8b6914);color:#07101a;font-weight:900;cursor:pointer}.primary:disabled{opacity:.35}.trophy{font-size:52px}.final-scores{display:grid;gap:7px;margin:20px}.final-scores div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid rgba(214,183,95,.12)}
-.role-strip{max-width:760px;margin:14px auto 4px;display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.role-pill{display:flex;flex-direction:column;padding:9px 13px;border:1px solid rgba(214,183,95,.17);border-radius:12px;background:rgba(8,22,36,.62)}.role-pill small{font-size:8px}.role-pill strong{color:#e8d69a}.role-pill span{font-size:9px;color:rgba(238,224,194,.46)}.role-pill.respondent.mine{border-color:rgba(203,126,86,.55);box-shadow:0 0 18px rgba(203,126,86,.1)}.role-pill.reader.mine{border-color:rgba(86,178,126,.58);box-shadow:0 0 18px rgba(86,178,126,.1)}.role-arrow{color:#806e43}.turn-message{max-width:900px;margin:8px auto;padding:9px 13px;border:1px solid rgba(214,183,95,.18);border-radius:9px;background:rgba(214,183,95,.06);color:#ddc985;text-align:center;font-size:12px}.game-grid{max-width:1320px;margin:12px auto 0;display:grid;grid-template-columns:minmax(0,1.32fr) minmax(350px,.78fr);gap:18px;align-items:start}.board-column,.action-column{min-width:0}.room-legend{display:flex;justify-content:space-between;gap:10px;padding:7px 16px;color:rgba(238,224,194,.45);font-size:9px;text-transform:uppercase;letter-spacing:.08em}.respondent-question,.spectator-question,.dice-panel,.kabbalah-turn-panel{max-width:590px;margin:0 auto;padding:22px;border:1px solid rgba(214,183,95,.28);border-radius:18px;background:radial-gradient(circle at top,rgba(214,183,95,.08),rgba(8,22,36,.9));box-shadow:0 18px 45px rgba(0,0,0,.3)}.respondent-question h2,.spectator-question h2,.kabbalah-turn-panel h2{color:#f2e5bd;font:700 22px/1.42 Georgia,serif}.hidden-answer-notice{display:grid;grid-template-columns:45px 1fr;gap:10px;align-items:start;margin-top:16px;padding:13px;border:1px solid rgba(195,130,80,.34);border-radius:12px;background:rgba(153,87,48,.1)}.hidden-answer-notice>span{font-size:30px}.hidden-answer-notice strong{color:#e9caab}.hidden-answer-notice p{margin:3px 0 0;color:rgba(238,224,194,.58);font-size:12px;line-height:1.45}.readonly-option{display:grid;grid-template-columns:31px 1fr;gap:9px;align-items:center;margin:7px 0;padding:10px;border:1px solid rgba(214,183,95,.18);border-radius:9px;background:rgba(214,183,95,.05)}.readonly-option b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.25);color:#d8bd68}.spectator-question>p{color:rgba(238,224,194,.47);font-size:11px}.dice-panel{text-align:center}.dice{font-size:82px;line-height:1;margin:16px;color:#e5cd82;text-shadow:0 8px 20px rgba(0,0,0,.4)}.dice.rolling{animation:diceShake .14s linear infinite}.dice-panel small{display:block;margin-top:10px;color:rgba(238,224,194,.45)}.tree-mark{font-size:72px;color:#c9aa55;text-align:center;text-shadow:0 0 25px rgba(201,170,85,.25)}.kabbalah-turn-panel{text-align:center}.kabbalah-turn-panel p{color:rgba(238,224,194,.56);line-height:1.5}.score-strip{max-width:1320px;margin:15px auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.score-strip article{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid rgba(214,183,95,.13);border-radius:10px;background:rgba(8,22,36,.58)}.score-strip article.active{border-color:rgba(195,126,83,.52)}.score-strip article.reader{box-shadow:inset 0 0 0 1px rgba(70,155,105,.28)}.score-strip article>div{display:flex;flex:1;flex-direction:column}.score-strip article strong{font-size:11px}.score-strip article small{font-size:8px;color:rgba(238,224,194,.45)}.score-strip article>b{color:#d8bc67;font-size:11px}.small-avatar{width:31px;height:31px;font-size:10px}@keyframes diceShake{0%{transform:rotate(-5deg) scale(.98)}50%{transform:rotate(6deg) scale(1.05)}100%{transform:rotate(-5deg) scale(.98)}}
-@media(max-width:980px){.game-grid{grid-template-columns:1fr}.game-header{grid-template-columns:auto 1fr}.header-actions{grid-column:1/-1;justify-content:flex-end}.action-column{order:-1}.respondent-question,.spectator-question,.dice-panel,.kabbalah-turn-panel{max-width:720px}}@media(max-width:620px){.turns-game{padding:10px 8px 75px}.room-title h1{font-size:21px}.game-header{gap:9px}.role-strip{grid-template-columns:1fr 18px 1fr}.role-pill{padding:8px}.role-pill strong{font-size:11px}.role-pill span{display:none}.respondent-question,.spectator-question,.dice-panel,.kabbalah-turn-panel{padding:15px}.respondent-question h2,.spectator-question h2,.kabbalah-turn-panel h2{font-size:18px}.room-legend{padding:6px 4px;flex-direction:column;text-align:center}.score-strip{grid-template-columns:1fr 1fr}}
+.turns-game{min-height:100vh;padding:18px 18px 80px;background:radial-gradient(circle at 50% -10%,rgba(37,75,117,.34),transparent 38%),#050a11;color:#eee0c2}.game-header{max-width:1320px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding-bottom:15px;border-bottom:1px solid rgba(214,183,95,.23)}.back{border:1px solid rgba(214,183,95,.3);background:transparent;color:#d9c17a;padding:9px 12px;border-radius:9px}.room-title>span,.kicker,small{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:#c6a44d}.room-title h1{margin:1px 0;color:#f0d992;font:700 30px Georgia}.room-title p{margin:0;color:rgba(238,224,194,.5)}.room-title p b{font-size:8px;color:#d99d72}.header-actions{display:flex;gap:10px;align-items:center}.turn-box{display:flex;flex-direction:column;text-align:right}.turn-box strong{color:#efdba7}.turn-box em{font-style:normal;font-size:9px;color:#84c9a5}.voice-btn{border:1px solid rgba(214,183,95,.35);border-radius:9px;padding:10px 12px;background:rgba(214,183,95,.06);color:#e0cb91;font-weight:800}.voice-btn.connected{border-color:rgba(73,164,103,.55);color:#9ad9ab}.voice-btn.muted{border-color:rgba(190,86,78,.55);color:#e5a19c}.guest-voice{padding:8px 10px;border:1px solid rgba(86,153,187,.24);border-radius:9px;color:#9ccbe1;font-size:9px}.voice-error{max-width:1320px;margin:9px auto;padding:9px 12px;border-left:3px solid #b34f4a;background:rgba(179,79,74,.09);color:#e6aaa6;font-size:11px}.state-panel,.waiting-panel,.finished-panel{max-width:760px;margin:50px auto;text-align:center;padding:35px;border:1px solid rgba(214,183,95,.25);border-radius:18px;background:rgba(8,22,36,.88)}.seal-line{font:700 28px Georgia;color:#c7aa57}.waiting-panel h2,.finished-panel h2{color:#efdb9a;font-family:Georgia,serif}.waiting-panel>p,.finished-panel>p{color:rgba(238,224,194,.57)}.players-waiting{display:grid;gap:8px;margin:20px 0}.waiting-player{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid rgba(214,183,95,.15);border-radius:10px;text-align:left}.waiting-player div{display:flex;flex:1;flex-direction:column}.waiting-player em{font-size:10px;color:#d2b863}.guest-count{font-size:10px!important;color:#93c9dd!important}.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c9a84c,#604817);color:#08111b;font-weight:900}.waiting-actions{display:flex;justify-content:center}.primary{border:0;border-radius:9px;padding:11px 15px;background:linear-gradient(135deg,#e1c36c,#8b6914);color:#07101a;font-weight:900;cursor:pointer}.primary:disabled{opacity:.35}.trophy{font-size:52px}.final-scores{display:grid;gap:7px;margin:20px}.final-scores div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid rgba(214,183,95,.12)}.role-strip{max-width:760px;margin:14px auto 4px;display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.role-pill{display:flex;flex-direction:column;padding:9px 13px;border:1px solid rgba(214,183,95,.17);border-radius:12px;background:rgba(8,22,36,.62)}.role-pill small{font-size:8px}.role-pill strong{color:#e8d69a}.role-pill span{font-size:9px;color:rgba(238,224,194,.46)}.role-pill.respondent.mine{border-color:rgba(203,126,86,.55);box-shadow:0 0 18px rgba(203,126,86,.1)}.role-pill.reader.mine{border-color:rgba(86,178,126,.58);box-shadow:0 0 18px rgba(86,178,126,.1)}.role-arrow{color:#806e43}.turn-message{max-width:900px;margin:8px auto;padding:9px 13px;border:1px solid rgba(214,183,95,.18);border-radius:9px;background:rgba(214,183,95,.06);color:#ddc985;text-align:center;font-size:12px}.game-grid{max-width:1320px;margin:12px auto 0;display:grid;grid-template-columns:minmax(0,1.32fr) minmax(350px,.78fr);gap:18px;align-items:start}.board-column,.action-column{min-width:0}.room-legend{display:flex;justify-content:space-between;gap:10px;padding:7px 16px;color:rgba(238,224,194,.45);font-size:9px;text-transform:uppercase;letter-spacing:.08em}.respondent-question,.spectator-question,.dice-panel,.kabbalah-turn-panel{max-width:590px;margin:0 auto;padding:22px;border:1px solid rgba(214,183,95,.28);border-radius:18px;background:radial-gradient(circle at top,rgba(214,183,95,.08),rgba(8,22,36,.9));box-shadow:0 18px 45px rgba(0,0,0,.3)}.respondent-question h2,.spectator-question h2,.kabbalah-turn-panel h2{color:#f2e5bd;font:700 22px/1.42 Georgia,serif}.hidden-answer-notice{display:grid;grid-template-columns:45px 1fr;gap:10px;align-items:start;margin-top:16px;padding:13px;border:1px solid rgba(195,130,80,.34);border-radius:12px;background:rgba(153,87,48,.1)}.hidden-answer-notice>span{font-size:30px}.hidden-answer-notice strong{color:#e9caab}.hidden-answer-notice p{margin:3px 0 0;color:rgba(238,224,194,.58);font-size:12px;line-height:1.45}.readonly-option{display:grid;grid-template-columns:31px 1fr;gap:9px;align-items:center;margin:7px 0;padding:10px;border:1px solid rgba(214,183,95,.18);border-radius:9px;background:rgba(214,183,95,.05)}.readonly-option b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.25);color:#d8bd68}.spectator-question>p{color:rgba(238,224,194,.47);font-size:11px}.dice-panel{text-align:center}.dice{font-size:82px;line-height:1;margin:16px;color:#e5cd82;text-shadow:0 8px 20px rgba(0,0,0,.4)}.dice.rolling{animation:diceShake .14s linear infinite}.dice-panel small{display:block;margin-top:10px;color:rgba(238,224,194,.45)}.tree-mark{font-size:72px;color:#c9aa55;text-align:center;text-shadow:0 0 25px rgba(201,170,85,.25)}.kabbalah-turn-panel{text-align:center}.kabbalah-turn-panel p{color:rgba(238,224,194,.56);line-height:1.5}.score-strip{max-width:1320px;margin:15px auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.score-strip article{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid rgba(214,183,95,.13);border-radius:10px;background:rgba(8,22,36,.58)}.score-strip article.active{border-color:rgba(195,126,83,.52)}.score-strip article.reader{box-shadow:inset 0 0 0 1px rgba(70,155,105,.28)}.score-strip article>div{display:flex;flex:1;flex-direction:column}.score-strip article strong{font-size:11px}.score-strip article small{font-size:8px;color:rgba(238,224,194,.45)}.score-strip article>b{color:#d8bc67;font-size:11px}.small-avatar{width:31px;height:31px;font-size:10px}@keyframes diceShake{0%{transform:rotate(-5deg) scale(.98)}50%{transform:rotate(6deg) scale(1.05)}100%{transform:rotate(-5deg) scale(.98)}}
+@media(max-width:980px){.game-grid{grid-template-columns:1fr}.game-header{grid-template-columns:auto 1fr}.header-actions{grid-column:1/-1;justify-content:flex-end}.action-column{order:-1}.respondent-question,.spectator-question,.dice-panel,.kabbalah-turn-panel{max-width:720px}}@media(max-width:620px){.turns-game{padding:10px 6px 82px;overflow-x:hidden}.room-title h1{font-size:21px}.game-header{gap:9px}.header-actions{justify-content:space-between}.role-strip{grid-template-columns:1fr 18px 1fr}.role-pill{padding:8px}.role-pill strong{font-size:11px}.role-pill span{display:none}.respondent-question,.spectator-question,.dice-panel,.kabbalah-turn-panel{padding:15px}.respondent-question h2,.spectator-question h2,.kabbalah-turn-panel h2{font-size:18px}.room-legend{padding:6px 4px;flex-direction:column;gap:3px}.score-strip{display:flex;overflow-x:auto;padding-bottom:5px}.score-strip article{min-width:170px}.board-column{width:100%;overflow:visible}.game-grid{width:100%}}
 </style>
