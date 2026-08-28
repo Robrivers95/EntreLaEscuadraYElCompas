@@ -5,6 +5,7 @@
 </template>
 
 <script setup lang="ts">
+import '@/shared/premium-game-ui.css'
 import { useAuthStore } from '@/stores/authStore'
 import { onMounted } from 'vue'
 
