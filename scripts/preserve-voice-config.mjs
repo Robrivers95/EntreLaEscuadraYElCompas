@@ -6,7 +6,7 @@ const ENV_PATH = path.join(ROOT, '.env.local')
 const LIVE_URL = process.env.VOICE_SOURCE_URL || 'https://juegodemesamasonico.web.app/'
 const REQUIRE_VOICE = process.argv.includes('--require')
 const APP_ID_RE = /\b[a-f0-9]{32}\b/gi
-const ASSET_RE = /["'`](\/assets\/[^"'`?#]+\.js(?:\?[^"'`]*)?)["'`]/g
+const JS_REF_RE = /["'`]((?:\/assets\/|\.\/|\.\.\/)[^"'`?#]+\.js(?:\?[^"'`]*)?)["'`]/g
 const ANCHORS = [
   'AudioService not initialized',
   'createMicrophoneAudioTrack',
@@ -44,7 +44,7 @@ async function fetchText(url) {
 
 function assetUrls(text, base) {
   const urls = new Set()
-  for (const match of text.matchAll(ASSET_RE)) {
+  for (const match of text.matchAll(JS_REF_RE)) {
     try { urls.add(new URL(match[1], base).href) } catch { /* ignore malformed asset */ }
   }
   return urls
@@ -79,7 +79,7 @@ async function recoverFromPublishedBuild() {
   const seen = new Set()
   const aggregate = new Map()
 
-  while (queue.length && seen.size < 80) {
+  while (queue.length && seen.size < 120) {
     const url = queue.shift()
     if (!url || seen.has(url)) continue
     seen.add(url)
