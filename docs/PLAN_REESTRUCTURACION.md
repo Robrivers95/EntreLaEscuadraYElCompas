@@ -27,10 +27,10 @@
 - Las comprobaciones de grado de esta versión están en el cliente; faltan reglas de Firebase o Cloud Functions para evitar lecturas, escrituras y suplantación de identidad.
 - Antes del despliegue probar con Aprendiz/Compañero/Maestro, espectadores, reconexión, dos navegadores y controles de privacidad.
 
-## Requisito de lanzamiento: voz + videollamada (obligatorios)
-- La Sala de Debate incorpora una cuadrícula audiovisual basada en Agora y controles de cámara/micrófono. Es una integración de cliente, NO una llamada comprobada.
-- Para conectar requiere VITE_AGORA_APP_ID y una Firebase Callable Function llamada getDebateRtcToken que responda {token}. Esa función aún NO está creada ni desplegada; debe validar Firebase Auth, pertenencia, Cámara/grado desde users/{uid}, estado y rol en debateRooms/{id}, y emitir token firmado de Agora para el canal debate-{id} y uid autenticado.
-- El App Certificate/clave secreta de Agora debe mantenerse solo en backend, jamás en VITE_, GitHub público ni bundle web. Asegurar coincidencia de región Firebase Functions.
-- Es obligatorio aplicar permisos de publicación de audio en el proveedor/servidor para que solo el hablante del turno pueda emitir voz; el cambio de micrófono en Vue NO equivale a seguridad. Espectadores no deben recibir capacidad de publicar audio.
-- La cobertura de videollamada para partidas de tablero también queda pendiente: en la rama actual el tablero conserva únicamente voz.
-- Antes del deploy: end-to-end con dos participantes, turnos, reconexión, cámara apagada/encendida, permisos de grado, espectadores y redes móviles. No desplegar sin completar las condiciones.
+
+## Decisión de producto: solo voz, sin videollamada (octubre 2026)
+- El usuario eligió mantener solo audio, sin suscripciones por minutos de videollamada. El componente de video Agora fue retirado.
+- El tablero conserva su AudioService; en la sala de debate se reutiliza la misma clase y el fallback WebRTC con señalización Firestore cuando VITE_AGORA_APP_ID no está configurado.
+- **Gratuidad:** WebRTC no cobra por minuto de audio, pero Firestore (lecturas, escrituras, señalización), conectividad y eventuales servidores TURN pueden generar costos o límites de cuota. No afirmar voz ilimitada garantizada, especialmente con muchos participantes o redes que bloquean conexiones P2P.
+- Antes de producción: pruebas entre dos y más usuarios, redes móviles/NAT, cumplimiento de reglas de seguridad de Firestore para voiceRooms y debates, y mecanismos contra micrófonos fuera de turno en servidor. El muteo actual es cooperativo/local, no obligatorio desde backend.
+- El aviso sobre configuración Agora debe tratarse como informativo si se utiliza intencionalmente WebRTC; evitar que una opción opcional bloquee el modo gratuito, sin eliminar los controles de preservación del audio existente.
