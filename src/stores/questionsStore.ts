@@ -10,6 +10,7 @@ import { FREE_GENERAL_QUESTIONS } from '@/modules/questions/freeGeneralQuestions
 import { KABBALAH_QUESTIONS } from '@/modules/questions/kabbalahQuestions'
 import { getQuestionRite, isOpenKnowledgeBank, isQuestionAllowedForDegree, normalizeAnswer, questionSupportsMode } from '@/modules/questions/questionRules'
 import type { MasonicDegree, MasonicRite, Question, QuestionDifficulty, QuestionGameMode } from '@/modules/questions/types'
+import type { QuestionSelection } from '@/modules/game/lobby/types'
 
 interface LoadQuestionsOptions { force?: boolean; fallbackToDefaults?: boolean }
 
@@ -95,10 +96,11 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const getEligibleQuestions = (category:string, degree:MasonicDegree, rite:MasonicRite='reaa', gameMode:QuestionGameMode='board'):Question[] => questions.value.filter((question) => questionSupportsMode(question,gameMode) && question.category===category && getQuestionRite(question)===rite && isQuestionAllowedForDegree(question.difficulty,degree))
 
-  const getQuestionsForRoom = (rite:MasonicRite, level:QuestionDifficulty, category?:string, gameMode:QuestionGameMode='board'):Question[] => questions.value.filter((question) => {
+  const getQuestionsForRoom = (rite:MasonicRite, level:QuestionDifficulty, category?:string, gameMode:QuestionGameMode='board', selection:QuestionSelection='rite'):Question[] => questions.value.filter((question) => {
     if (!questionSupportsMode(question, gameMode)) return false
-    if (getQuestionRite(question) !== rite) return false
     if (category && question.category !== category) return false
+    if (selection === 'mixed' && !isOpenKnowledgeBank(rite) && question.difficulty === 'general' && getQuestionRite(question) === 'libre') return true
+    if (getQuestionRite(question) !== rite) return false
     if (isOpenKnowledgeBank(rite)) return question.difficulty === 'general'
     if (level === 'general') return false
     return question.difficulty === level
