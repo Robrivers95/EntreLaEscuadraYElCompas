@@ -19,11 +19,16 @@
         <div v-if="!myRole&&room.status!=='finished'" class="actions"><button :disabled="busy||room.status!=='waiting'" @click="join('participant')">Participar con voz</button><button :disabled="busy" @click="join('spectator')">Entrar como espectador</button></div>
         <p v-if="myRole">Tu acceso: <strong>{{ myRole==='participant'?'Participante':'Espectador · solamente chat' }}</strong></p>
         <div v-if="myRole==='participant'" class="actions voice-controls">
-          <button :disabled="voiceBusy" @click="voiceConnected ? disconnectVoice() : connectVoice()">{{ voiceBusy ? 'Conectando…' : voiceConnected ? '🔌 Desconectar audio' : '🎧 Conectar voz' }}</button>
+          <button :disabled="voiceBusy" @click="voiceConnected ? disconnectVoice() : connectVoice()">{{ voiceBusy ? 'Conectando…' : voiceConnected ? '🔌 Salir de videollamada' : '📹 Unirse a videollamada' }}</button>
+          <button v-if="voiceConnected" :disabled="voiceBusy" @click="toggleCamera">{{ cameraEnabled ? '📷 Apagar cámara' : '📷 Encender cámara' }}</button>
           <span v-if="voiceConnected">{{ canSpeak ? '🎙 Tienes la palabra' : '🔇 Micrófono silenciado · escucha el debate' }}</span>
           <span v-else>Activa la voz para escuchar a los participantes.</span>
         </div>
         <p v-if="voiceError" class="error">{{ voiceError }}</p>
+        <section v-if="voiceConnected" class="video-grid" aria-label="Videollamada de debate">
+          <div class="video-tile"><div id="debate-local-video" class="video-frame"></div><span>Tú {{ cameraEnabled ? '· cámara activa' : '· cámara apagada' }}</span></div>
+          <div v-for="peer in remoteVideoIds" :key="peer" class="video-tile"><div :id="'debate-remote-'+peer" class="video-frame"></div><span>{{ peer }}</span></div>
+        </section>
         <div v-if="room.status==='waiting'"><p>El moderador puede iniciar cuando todos los participantes estén inscritos. Después únicamente se aceptan espectadores.</p><button v-if="isHost" class="primary" :disabled="busy" @click="runAction('start')">Cerrar inscripciones e iniciar</button></div>
         <div v-if="room.status==='active'" class="speaker"><small>TURNO DE PALABRA</small><h3>{{ speaker?.name||'Sin participantes' }}</h3><strong>{{ countdown }} s</strong><p>La palabra pasa al siguiente Hermano al agotarse el turno o cuando este la cede.</p>
           <button v-if="isHost||(myRole==='participant'&&speaker?.uid===uid)" :disabled="busy" @click="runAction('next')">Ceder / siguiente turno</button>
@@ -32,17 +37,19 @@
       </section>
       <section class="panel columns"><div><h2>Participantes ({{ room.participants.length }})</h2><p v-for="member in room.participants" :key="member.uid">🎙 {{ member.name }} <small v-if="member.uid===speaker?.uid&&room.status==='active'">· tiene la palabra</small></p></div><div><h2>Espectadores ({{ room.spectators.length }})</h2><p v-for="member in room.spectators" :key="member.uid">👁 {{ member.name }}</p></div></section>
       <section class="panel"><h2>Chat del debate</h2><div class="messages"><p v-for="message in messages" :key="message.id"><strong>{{ message.name }}:</strong> {{ message.text }}</p></div><form v-if="myRole&&room.status!=='finished'" @submit.prevent="sendMessage"><input v-model="draft" maxlength="500" placeholder="Escribe tu comentario…" /><button :disabled="busy||!draft.trim()">Enviar</button></form></section>
-      <p class="notice">El audio reutiliza la conexión del tablero: escucha y micrófono según el turno. El silenciamiento de esta versión se controla en el navegador, NO está garantizado por el servidor; no admite todavía espectadores con audio ni videollamadas. No publicar sin reglas de acceso y pruebas con varios usuarios.</p>
+      <p class="notice">La videollamada requiere Agora y el servicio seguro getDebateRtcToken. El micrófono se ajusta al turno localmente; falta prohibir la transmisión fuera de turno en el servidor. No publicar sin verificar controles de Cámara, audio y video con varios usuarios.</p>
     </template>
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { getAllowedDifficulties } from '@/modules/questions/questionRules'
 import { debateService } from '@/modules/debate/debateService'
-import { AudioService } from '@/modules/game/modes/realtime/audioService'
+import { DebateCallService } from '@/modules/debate/debateCallService'
+import app from '@/core/firebase'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import type { DebateRoom, DebateMessage } from '@/modules/debate/debateService'
 import type { MasonicRite } from '@/modules/questions/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
@@ -54,7 +61,21 @@ const allowedChambers=computed(()=>auth.masonicDegree?getAllowedDifficulties(aut
 const topic=ref(''), rite=ref<MasonicRite>('reaa'), level=ref<RoomLevel>('aprendiz'), turnSeconds=ref(120)
 const rooms=ref<DebateRoom[]>([]),room=ref<DebateRoom|null>(null),activeId=ref(''),messages=ref<DebateMessage[]>([])
 const draft=ref(''),error=ref(''),busy=ref(false),now=ref(Date.now())
-const voice=new AudioService()
+const voice=new DebateCallService()
+const remoteVideoIds=ref<string[]>([]),cameraEnabled=ref(false)
+const rtcToken=getFunctions(app)
+const requestRtcToken=httpsCallable<{debateId:string},{token:string}>(rtcToken,'getDebateRtcToken')
+const drawVideo=async()=>{
+  await nextTick()
+  if(!voiceConnected.value)return
+  const local=document.getElementById('debate-local-video')
+  if(local&&voice.getLocalVideoTrack())voice.getLocalVideoTrack()?.play(local)
+  for(const id of remoteVideoIds.value){
+    const container=document.getElementById('debate-remote-'+id)
+    if(container&&voice.getRemoteVideoTrack(id))voice.getRemoteVideoTrack(id)?.play(container)
+  }
+}
+voice.setOnChange(()=>{remoteVideoIds.value=voice.getRemoteIds();void drawVideo()})
 const voiceConnected=ref(false),voiceBusy=ref(false),voiceError=ref('')
 let stopRooms:(()=>void)|null=null,stopRoom:(()=>void)|null=null,stopChat:(()=>void)|null=null,ticker:ReturnType<typeof setInterval>|null=null
 let expirationInFlight=false
@@ -68,26 +89,33 @@ const canSpeak=computed(()=>myRole.value==='participant'&&room.value?.status==='
 const countdown=computed(()=>!room.value?.speakerStartedAt?room.value?.turnSeconds??0:Math.max(0,Math.ceil((room.value.turnSeconds*1000-(now.value-room.value.speakerStartedAt))/1000)))
 const disconnectVoice=async()=>{
   voiceConnected.value=false
-  try{await voice.leave()}catch(e){console.warn('Error al salir del audio',e)}
+  cameraEnabled.value=false
+  remoteVideoIds.value=[]
+  try{await voice.disconnect()}catch(e){console.warn('Error al salir del audio',e)}
 }
 const connectVoice=async()=>{
   if(myRole.value!=='participant'||!room.value||!uid.value||voiceBusy.value)return
   voiceBusy.value=true;voiceError.value=''
   try{
-    await voice.initialize('debate-'+room.value.id)
-    await voice.join(uid.value)
-    await voice.publishAudio()
-    await voice.toggleAudio(false)
+    const response=await requestRtcToken({debateId:room.value.id})
+    await voice.connect('debate-'+room.value.id,uid.value,response.data.token)
     voiceConnected.value=true
-    if(canSpeak.value)await voice.toggleAudio(true)
+    cameraEnabled.value=true
+    await drawVideo()
+    await voice.setMicrophone(canSpeak.value)
   }catch(e){
     voiceError.value=e instanceof Error?e.message:'No se pudo conectar la voz.'
     await disconnectVoice()
   }finally{voiceBusy.value=false}
 }
+const toggleCamera=async()=>{
+  if(!voiceConnected.value)return
+  try{await voice.setCamera(!cameraEnabled.value);cameraEnabled.value=!cameraEnabled.value;await drawVideo()}
+  catch(e){voiceError.value=e instanceof Error?e.message:'No se pudo cambiar la cámara.'}
+}
 watch(canSpeak,async allowed=>{
   if(!voiceConnected.value)return
-  try{await voice.toggleAudio(allowed)}catch(e){voiceError.value=e instanceof Error?e.message:'No se pudo cambiar el micrófono.'}
+  try{await voice.setMicrophone(allowed)}catch(e){voiceError.value=e instanceof Error?e.message:'No se pudo cambiar el micrófono.'}
 })
 watch(activeId,()=>{if(voiceConnected.value)void disconnectVoice()})
 const open=(id:string)=>{activeId.value=id}
@@ -113,4 +141,5 @@ const sendMessage=async()=>{busy.value=true;error.value='';try{await debateServi
 </script>
 <style scoped>
 .debate{min-height:100vh;padding:24px 16px 65px;background:radial-gradient(circle at 50% 0%,#19344a,#050b13 60%);color:#e9dec8}.debate>*{max-width:1060px;margin:0 auto 20px}.debate header{display:flex;align-items:flex-start;gap:20px}.debate h1,.debate h2,.debate h3{font-family:Georgia,serif;color:#dfc57d}.debate h1{font-size:clamp(28px,4vw,42px);margin:4px 0}.debate h2{margin:0 0 14px}.debate p{line-height:1.5;color:#cfc4aa}.debate small{color:#b99b55;letter-spacing:.06em}.panel{padding:20px;border:1px solid #6a5a32;border-radius:15px;background:#0e1c2b}.panel label{display:block;margin:10px 0;color:#e9dec8}.panel label input,.panel label select{display:block;margin-top:5px;width:100%;max-width:560px}.debate input,.debate select{border:1px solid #6b6b67;border-radius:8px;padding:11px;background:#152b3b;color:#f2ead4}.debate button{cursor:pointer;border:1px solid #8e7b4c;border-radius:9px;padding:10px 13px;background:#243a4d;color:#f5e5b6}.debate button:disabled{opacity:.4;cursor:default}.debate button.primary{background:#b99b55;color:#0c1723;font-weight:700}.entry,.header-row,.actions{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.entry{padding:14px 0;border-bottom:1px solid #53482f}.entry p{margin:3px 0}.speaker{text-align:center;padding:20px;border-radius:12px;background:#172e41;margin:16px 0}.speaker strong{font-size:38px;color:#e6cf88}.speaker h3{font-size:26px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:20px}.messages{max-height:300px;overflow:auto}.messages p{padding:8px;border-bottom:1px solid #374458}.panel form{display:flex;gap:10px}.panel form input{flex:1}.error{color:#ffb7a8!important}.notice{font-size:12px;opacity:.8}@media(max-width:650px){.columns{grid-template-columns:1fr}.panel form{flex-direction:column}}
+.video-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0}.video-tile{overflow:hidden;border:1px solid #7a6c48;border-radius:12px;background:#06111c}.video-frame{width:100%;aspect-ratio:4/3;background:#0b1621}.video-tile span{display:block;padding:8px 12px;font-size:12px;color:#eed6a0}
 </style>
