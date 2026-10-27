@@ -14,6 +14,22 @@ import {
 } from 'firebase/firestore'
 import type { BoardRoom, CreateBoardRoomInput, RoomGuest, RoomPlayer } from './types'
 import { ROOM_TOTAL_CAPACITY } from './types'
+import { normalizeMiLogiaDegree, getAllowedDifficulties } from '@/modules/questions/questionRules'
+import type { MasonicDegree } from '@/modules/questions/types'
+
+const requireChamberAccess = (degree: MasonicDegree | null, level: BoardRoom['level']) => {
+  if (level === 'general') return
+  if (!degree || !getAllowedDifficulties(degree).includes(level)) throw new Error('Tu grado registrado en Mi Logia no permite entrar a esta Cámara.')
+}
+
+const verifiedDegree = async (transaction: { get: (ref: ReturnType<typeof doc>) => Promise<{ exists: () => boolean; data: () => Record<string, unknown> }> }, uid: string): Promise<MasonicDegree> => {
+  const snapshot = await transaction.get(doc(db, 'users', uid))
+  const data = snapshot.exists() ? snapshot.data() : null
+  const degree = normalizeMiLogiaDegree(typeof data?.degree === 'string' ? data.degree : null)
+  if (!data || data.active === false || !degree) throw new Error('No se pudo validar un perfil activo y su grado en Mi Logia.')
+  return degree
+}
+
 
 const roomsCollection = collection(db, 'gameRooms')
 
@@ -38,11 +54,16 @@ const totalPeople = (room: BoardRoom) => room.players.length + room.guests.lengt
 
 export const roomService = {
   async createRoom(input: CreateBoardRoomInput): Promise<string> {
+    const hostProfile = await getDoc(doc(db, 'users', input.hostUid))
+    const hostData = hostProfile.exists() ? hostProfile.data() : null
+    const hostDegree = normalizeMiLogiaDegree(typeof hostData?.degree === 'string' ? hostData.degree : null)
+    if (!hostData || hostData.active === false || !hostDegree) throw new Error('Tu grado no pudo validarse en Mi Logia.')
+    requireChamberAccess(hostDegree, input.level)
     const now = Date.now()
     const host: RoomPlayer = {
       uid: input.hostUid,
       name: input.hostName,
-      degree: input.hostDegree,
+      degree: hostDegree,
       position: 0,
       score: 0,
       joinedAt: now,
@@ -100,6 +121,8 @@ export const roomService = {
       const snapshot = await transaction.get(roomRef)
       if (!snapshot.exists()) throw new Error('La sala ya no existe.')
       const room = asRoom(snapshot.id, snapshot.data())
+      const degree = await verifiedDegree(transaction, player.uid)
+      requireChamberAccess(degree, room.level)
       if (room.bannedIds.includes(player.uid)) throw new Error('El anfitrión bloqueó tu acceso a esta sala.')
       if (room.isLocked) throw new Error('El anfitrión cerró las entradas a esta sala.')
       if (room.status !== 'waiting') throw new Error('La partida ya comenzó. Puedes entrar como invitado.')
@@ -110,7 +133,7 @@ export const roomService = {
       const guests = room.guests.filter((guest) => guest.uid !== player.uid)
       const guestIds = room.guestIds.filter((uid) => uid !== player.uid)
       transaction.update(roomRef, {
-        players: [...room.players, player],
+        players: [...room.players, { ...player, degree }],
         playerIds: [...room.playerIds, player.uid],
         guests,
         guestIds,
@@ -125,12 +148,14 @@ export const roomService = {
       const snapshot = await transaction.get(roomRef)
       if (!snapshot.exists()) throw new Error('La sala ya no existe.')
       const room = asRoom(snapshot.id, snapshot.data())
+      const degree = await verifiedDegree(transaction, guest.uid)
+      requireChamberAccess(degree, room.level)
       if (room.bannedIds.includes(guest.uid)) throw new Error('El anfitrión bloqueó tu acceso a esta sala.')
       if (room.isLocked) throw new Error('El anfitrión cerró las entradas a esta sala.')
       if (room.playerIds.includes(guest.uid) || room.guestIds.includes(guest.uid)) return
       if (totalPeople(room) >= room.maxAttendees) throw new Error('La sala alcanzó el límite de 20 personas.')
       transaction.update(roomRef, {
-        guests: [...room.guests, guest],
+        guests: [...room.guests, { ...guest, degree }],
         guestIds: [...room.guestIds, guest.uid],
         updatedAt: Date.now(),
       })
