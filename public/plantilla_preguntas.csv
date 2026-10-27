@@ -1,0 +1,3 @@
+id,pregunta,opcion_a,opcion_b,opcion_c,opcion_d,correcta,categoria,rito,grado,explicacion,fuente,modalidades,activa
+EJ-001,¿Qué herramienta simboliza la rectitud?,Escuadra,Compás,Nivel,Plomada,A,Simbolismo,reaa,aprendiz,La escuadra simboliza la rectitud,Referencia pública,board;duel;study,true
+EJ-002,¿Cuál es la capital de México?,Guadalajara,Monterrey,Ciudad de México,Puebla,C,Geografía,libre,general,La capital es Ciudad de México,Referencia general,board;duel;study,true
