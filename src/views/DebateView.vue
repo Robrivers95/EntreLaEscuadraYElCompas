@@ -16,7 +16,7 @@
     </template>
     <template v-else-if="room">
       <section class="panel"><div class="header-row"><div><small>{{ room.status==='waiting'?'INSCRIPCIONES ABIERTAS':room.status==='active'?'DEBATE EN CURSO':'FINALIZADO' }} · {{ degreeLabel(room.level) }}</small><h2>{{ room.topic }}</h2><p>Moderador: {{ room.hostName }} · {{ room.turnSeconds/60 }} minuto(s) por intervención</p></div><button @click="activeId=''">Volver a salas</button></div>
-        <div v-if="!myRole&&room.status!=='finished'" class="actions"><button :disabled="busy" @click="join('participant')">Participar {{ room.status==='waiting'?'con voz':'(inscripción cerrada)' }}</button><button :disabled="busy" @click="join('spectator')">Entrar como espectador</button></div>
+        <div v-if="!myRole&&room.status!=='finished'" class="actions"><button :disabled="busy" @click="join('participant')" :disabled="busy||room.status!=='waiting'">Participar con voz</button><button :disabled="busy" @click="join('spectator')">Entrar como espectador</button></div>
         <p v-if="myRole">Tu acceso: <strong>{{ myRole==='participant'?'Participante':'Espectador · solamente chat' }}</strong></p>
         <div v-if="room.status==='waiting'"><p>El moderador puede iniciar cuando todos los participantes estén inscritos. Después únicamente se aceptan espectadores.</p><button v-if="isHost" class="primary" :disabled="busy" @click="runAction('start')">Cerrar inscripciones e iniciar</button></div>
         <div v-if="room.status==='active'" class="speaker"><small>TURNO DE PALABRA</small><h3>{{ speaker?.name||'Sin participantes' }}</h3><strong>{{ countdown }} s</strong><p>La palabra pasa al siguiente Hermano al agotarse el turno o cuando este la cede.</p>
@@ -26,7 +26,7 @@
       </section>
       <section class="panel columns"><div><h2>Participantes ({{ room.participants.length }})</h2><p v-for="member in room.participants" :key="member.uid">🎙 {{ member.name }} <small v-if="member.uid===speaker?.uid&&room.status==='active'">· tiene la palabra</small></p></div><div><h2>Espectadores ({{ room.spectators.length }})</h2><p v-for="member in room.spectators" :key="member.uid">👁 {{ member.name }}</p></div></section>
       <section class="panel"><h2>Chat del debate</h2><div class="messages"><p v-for="message in messages" :key="message.id"><strong>{{ message.name }}:</strong> {{ message.text }}</p></div><form v-if="myRole&&room.status!=='finished'" @submit.prevent="sendMessage"><input v-model="draft" maxlength="500" placeholder="Escribe tu comentario…" /><button :disabled="busy||!draft.trim()">Enviar</button></form></section>
-      <p class="notice">La videollamada y el muteo obligatorio aún requieren un servicio de audio con controles de servidor. Esta versión gestiona inscripciones, cronómetro, turnos y chat; no concede audio automáticamente.</p>
+      <p class="notice">El turno avanza cuando vence el cronómetro si al menos un participante permanece conectado. El audio, el video y el silenciamiento obligatorio requieren un servicio con controles de servidor; aún no están disponibles.</p>
     </template>
   </main>
 </template>
@@ -48,6 +48,8 @@ const topic=ref(''), rite=ref<MasonicRite>('reaa'), level=ref<RoomLevel>('aprend
 const rooms=ref<DebateRoom[]>([]),room=ref<DebateRoom|null>(null),activeId=ref(''),messages=ref<DebateMessage[]>([])
 const draft=ref(''),error=ref(''),busy=ref(false),now=ref(Date.now())
 let stopRooms:(()=>void)|null=null,stopRoom:(()=>void)|null=null,stopChat:(()=>void)|null=null,ticker:ReturnType<typeof setInterval>|null=null
+let expirationInFlight=false
+let lastExpiryAttempt=0
 const degreeLabel=(degree:RoomLevel)=>({aprendiz:'Aprendiz',compañero:'Compañero',maestro:'Maestro',general:'General'})[degree]
 const canEnter=(value:DebateRoom)=>value.level==='general'||allowedChambers.value.includes(value.level)
 const isHost=computed(()=>room.value?.hostUid===uid.value)
@@ -56,7 +58,18 @@ const speaker=computed(()=>room.value?.participants.length?room.value.participan
 const countdown=computed(()=>!room.value?.speakerStartedAt?room.value?.turnSeconds??0:Math.max(0,Math.ceil((room.value.turnSeconds*1000-(now.value-room.value.speakerStartedAt))/1000)))
 const open=(id:string)=>{activeId.value=id}
 watch(activeId,id=>{stopRoom?.();stopChat?.();room.value=null;messages.value=[];if(!id)return;stopRoom=debateService.subscribeRoom(id,v=>room.value=v);stopChat=debateService.subscribeChat(id,v=>messages.value=v)})
-onMounted(()=>{stopRooms=debateService.subscribeRooms(v=>rooms.value=v);ticker=setInterval(()=>now.value=Date.now(),500)})
+const checkExpiredTurn=async()=>{
+  const current=room.value
+  if(!current||current.status!=='active'||current.speakerStartedAt===null||!activeId.value)return
+  if(myRole.value!=='participant'||!uid.value||countdown.value>0||expirationInFlight)return
+  if(Date.now()-lastExpiryAttempt<3000)return
+  expirationInFlight=true
+  lastExpiryAttempt=Date.now()
+  try{await debateService.advanceExpiredTurn(current.id,uid.value,current.speakerStartedAt)}
+  catch(e){console.warn('No se pudo avanzar el turno automáticamente.',e)}
+  finally{expirationInFlight=false}
+}
+onMounted(()=>{stopRooms=debateService.subscribeRooms(v=>rooms.value=v);ticker=setInterval(()=>{now.value=Date.now();void checkExpiredTurn()},500)})
 onBeforeUnmount(()=>{stopRooms?.();stopRoom?.();stopChat?.();if(ticker)clearInterval(ticker)})
 const create=async()=>{if(!uid.value)return;busy.value=true;error.value='';try{const id=await debateService.create({uid:uid.value,name:name.value,topic:topic.value,rite:rite.value,level:level.value,turnSeconds:turnSeconds.value});open(id)}catch(e){error.value=e instanceof Error?e.message:'No fue posible crear la sala.'}finally{busy.value=false}}
 const enter=(value:DebateRoom)=>{error.value='';open(value.id)}
