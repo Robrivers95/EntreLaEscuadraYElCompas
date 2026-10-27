@@ -319,8 +319,8 @@ const rememberQuestion = (question: Question) => {
 
 const pickQuestion = (category?: string): Question | null => {
   if (!room.value) return null
-  let eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level, category, 'board')
-  if (!eligible.length) eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level, undefined, 'board')
+  let eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level, category, 'board', room.value.questionSelection ?? 'rite')
+  if (!eligible.length) eligible = questionsStore.getQuestionsForRoom(room.value.rite, room.value.level, undefined, 'board', room.value.questionSelection ?? 'rite')
   if (!eligible.length) return null
   const fresh = eligible.filter((question) => !recentQuestionIds.value.includes(question.id))
   const pool = fresh.length ? fresh : eligible
