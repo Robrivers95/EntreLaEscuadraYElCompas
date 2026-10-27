@@ -18,6 +18,12 @@
       <section class="panel"><div class="header-row"><div><small>{{ room.status==='waiting'?'INSCRIPCIONES ABIERTAS':room.status==='active'?'DEBATE EN CURSO':'FINALIZADO' }} · {{ degreeLabel(room.level) }}</small><h2>{{ room.topic }}</h2><p>Moderador: {{ room.hostName }} · {{ room.turnSeconds/60 }} minuto(s) por intervención</p></div><button @click="activeId=''">Volver a salas</button></div>
         <div v-if="!myRole&&room.status!=='finished'" class="actions"><button :disabled="busy||room.status!=='waiting'" @click="join('participant')">Participar con voz</button><button :disabled="busy" @click="join('spectator')">Entrar como espectador</button></div>
         <p v-if="myRole">Tu acceso: <strong>{{ myRole==='participant'?'Participante':'Espectador · solamente chat' }}</strong></p>
+        <div v-if="myRole==='participant'" class="actions voice-controls">
+          <button :disabled="voiceBusy" @click="voiceConnected ? disconnectVoice() : connectVoice()">{{ voiceBusy ? 'Conectando…' : voiceConnected ? '🔌 Desconectar audio' : '🎧 Conectar voz' }}</button>
+          <span v-if="voiceConnected">{{ canSpeak ? '🎙 Tienes la palabra' : '🔇 Micrófono silenciado · escucha el debate' }}</span>
+          <span v-else>Activa la voz para escuchar a los participantes.</span>
+        </div>
+        <p v-if="voiceError" class="error">{{ voiceError }}</p>
         <div v-if="room.status==='waiting'"><p>El moderador puede iniciar cuando todos los participantes estén inscritos. Después únicamente se aceptan espectadores.</p><button v-if="isHost" class="primary" :disabled="busy" @click="runAction('start')">Cerrar inscripciones e iniciar</button></div>
         <div v-if="room.status==='active'" class="speaker"><small>TURNO DE PALABRA</small><h3>{{ speaker?.name||'Sin participantes' }}</h3><strong>{{ countdown }} s</strong><p>La palabra pasa al siguiente Hermano al agotarse el turno o cuando este la cede.</p>
           <button v-if="isHost||(myRole==='participant'&&speaker?.uid===uid)" :disabled="busy" @click="runAction('next')">Ceder / siguiente turno</button>
@@ -26,7 +32,7 @@
       </section>
       <section class="panel columns"><div><h2>Participantes ({{ room.participants.length }})</h2><p v-for="member in room.participants" :key="member.uid">🎙 {{ member.name }} <small v-if="member.uid===speaker?.uid&&room.status==='active'">· tiene la palabra</small></p></div><div><h2>Espectadores ({{ room.spectators.length }})</h2><p v-for="member in room.spectators" :key="member.uid">👁 {{ member.name }}</p></div></section>
       <section class="panel"><h2>Chat del debate</h2><div class="messages"><p v-for="message in messages" :key="message.id"><strong>{{ message.name }}:</strong> {{ message.text }}</p></div><form v-if="myRole&&room.status!=='finished'" @submit.prevent="sendMessage"><input v-model="draft" maxlength="500" placeholder="Escribe tu comentario…" /><button :disabled="busy||!draft.trim()">Enviar</button></form></section>
-      <p class="notice">El turno avanza cuando vence el cronómetro si al menos un participante permanece conectado. El audio, el video y el silenciamiento obligatorio requieren un servicio con controles de servidor; aún no están disponibles.</p>
+      <p class="notice">El audio reutiliza la conexión del tablero: escucha y micrófono según el turno. El silenciamiento de esta versión se controla en el navegador, NO está garantizado por el servidor; no admite todavía espectadores con audio ni videollamadas. No publicar sin reglas de acceso y pruebas con varios usuarios.</p>
     </template>
   </main>
 </template>
@@ -36,6 +42,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { getAllowedDifficulties } from '@/modules/questions/questionRules'
 import { debateService } from '@/modules/debate/debateService'
+import { AudioService } from '@/modules/game/modes/realtime/audioService'
 import type { DebateRoom, DebateMessage } from '@/modules/debate/debateService'
 import type { MasonicRite } from '@/modules/questions/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
@@ -47,6 +54,8 @@ const allowedChambers=computed(()=>auth.masonicDegree?getAllowedDifficulties(aut
 const topic=ref(''), rite=ref<MasonicRite>('reaa'), level=ref<RoomLevel>('aprendiz'), turnSeconds=ref(120)
 const rooms=ref<DebateRoom[]>([]),room=ref<DebateRoom|null>(null),activeId=ref(''),messages=ref<DebateMessage[]>([])
 const draft=ref(''),error=ref(''),busy=ref(false),now=ref(Date.now())
+const voice=new AudioService()
+const voiceConnected=ref(false),voiceBusy=ref(false),voiceError=ref('')
 let stopRooms:(()=>void)|null=null,stopRoom:(()=>void)|null=null,stopChat:(()=>void)|null=null,ticker:ReturnType<typeof setInterval>|null=null
 let expirationInFlight=false
 let lastExpiryAttempt=0
@@ -55,7 +64,32 @@ const canEnter=(value:DebateRoom)=>value.level==='general'||allowedChambers.valu
 const isHost=computed(()=>room.value?.hostUid===uid.value)
 const myRole=computed<'participant'|'spectator'|null>(()=>room.value?.participants.some(p=>p.uid===uid.value)?'participant':room.value?.spectators.some(p=>p.uid===uid.value)?'spectator':null)
 const speaker=computed(()=>room.value?.participants.length?room.value.participants[room.value.speakerIndex%room.value.participants.length]:null)
+const canSpeak=computed(()=>myRole.value==='participant'&&room.value?.status==='active'&&speaker.value?.uid===uid.value&&countdown.value>0)
 const countdown=computed(()=>!room.value?.speakerStartedAt?room.value?.turnSeconds??0:Math.max(0,Math.ceil((room.value.turnSeconds*1000-(now.value-room.value.speakerStartedAt))/1000)))
+const disconnectVoice=async()=>{
+  voiceConnected.value=false
+  try{await voice.leave()}catch(e){console.warn('Error al salir del audio',e)}
+}
+const connectVoice=async()=>{
+  if(myRole.value!=='participant'||!room.value||!uid.value||voiceBusy.value)return
+  voiceBusy.value=true;voiceError.value=''
+  try{
+    await voice.initialize('debate-'+room.value.id)
+    await voice.join(uid.value)
+    await voice.publishAudio()
+    await voice.toggleAudio(false)
+    voiceConnected.value=true
+    if(canSpeak.value)await voice.toggleAudio(true)
+  }catch(e){
+    voiceError.value=e instanceof Error?e.message:'No se pudo conectar la voz.'
+    await disconnectVoice()
+  }finally{voiceBusy.value=false}
+}
+watch(canSpeak,async allowed=>{
+  if(!voiceConnected.value)return
+  try{await voice.toggleAudio(allowed)}catch(e){voiceError.value=e instanceof Error?e.message:'No se pudo cambiar el micrófono.'}
+})
+watch(activeId,()=>{if(voiceConnected.value)void disconnectVoice()})
 const open=(id:string)=>{activeId.value=id}
 watch(activeId,id=>{stopRoom?.();stopChat?.();room.value=null;messages.value=[];if(!id)return;stopRoom=debateService.subscribeRoom(id,v=>room.value=v);stopChat=debateService.subscribeChat(id,v=>messages.value=v)})
 const checkExpiredTurn=async()=>{
@@ -70,7 +104,7 @@ const checkExpiredTurn=async()=>{
   finally{expirationInFlight=false}
 }
 onMounted(()=>{stopRooms=debateService.subscribeRooms(v=>rooms.value=v);ticker=setInterval(()=>{now.value=Date.now();void checkExpiredTurn()},500)})
-onBeforeUnmount(()=>{stopRooms?.();stopRoom?.();stopChat?.();if(ticker)clearInterval(ticker)})
+onBeforeUnmount(()=>{stopRooms?.();stopRoom?.();stopChat?.();if(ticker)clearInterval(ticker);void disconnectVoice()})
 const create=async()=>{if(!uid.value)return;busy.value=true;error.value='';try{const id=await debateService.create({uid:uid.value,name:name.value,topic:topic.value,rite:rite.value,level:level.value,turnSeconds:turnSeconds.value});open(id)}catch(e){error.value=e instanceof Error?e.message:'No fue posible crear la sala.'}finally{busy.value=false}}
 const enter=(value:DebateRoom)=>{error.value='';open(value.id)}
 const join=async(role:'participant'|'spectator')=>{if(!uid.value||!activeId.value)return;busy.value=true;error.value='';try{await debateService.join(activeId.value,uid.value,name.value,role)}catch(e){error.value=e instanceof Error?e.message:'No se pudo ingresar.'}finally{busy.value=false}}
