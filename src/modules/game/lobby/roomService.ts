@@ -194,6 +194,30 @@ export const roomService = {
     })
   },
 
+  /** A player voluntarily resigns an active match. The remaining rival wins. */
+  async surrenderRoom(roomId: string, uid: string): Promise<void> {
+    const roomRef = doc(db, 'gameRooms', roomId)
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(roomRef)
+      if (!snapshot.exists()) throw new Error('La sala ya no existe.')
+      const room = asRoom(snapshot.id, snapshot.data())
+      if (room.status !== 'playing') throw new Error('Solo puedes rendirte durante una partida.')
+      if (!room.playerIds.includes(uid)) throw new Error('No eres jugador de esta partida.')
+      const opponents = room.players.filter((player) => player.uid !== uid)
+      if (!opponents.length) throw new Error('No existe otro jugador al que adjudicar la victoria.')
+      // No alteramos listas/host/grados: conservar el resultado evita partidas abandonadas
+      // y reduce los campos que las reglas existentes necesitan permitir actualizar.
+      const winner = [...opponents].sort((a, b) => b.score - a.score)[0]
+      transaction.update(roomRef, {
+        status: 'finished',
+        winnerUid: winner.uid,
+        currentQuestionId: null,
+        currentCategory: null,
+        updatedAt: Date.now(),
+      })
+    })
+  },
+
   async kickMember(roomId: string, hostUid: string, targetUid: string): Promise<void> {
     if (hostUid === targetUid) throw new Error('El anfitrión no puede expulsarse a sí mismo.')
     const roomRef = doc(db, 'gameRooms', roomId)
