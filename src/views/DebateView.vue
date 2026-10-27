@@ -16,7 +16,7 @@
     </template>
     <template v-else-if="room">
       <section class="panel"><div class="header-row"><div><small>{{ room.status==='waiting'?'INSCRIPCIONES ABIERTAS':room.status==='active'?'DEBATE EN CURSO':'FINALIZADO' }} · {{ degreeLabel(room.level) }}</small><h2>{{ room.topic }}</h2><p>Moderador: {{ room.hostName }} · {{ room.turnSeconds/60 }} minuto(s) por intervención</p></div><button @click="activeId=''">Volver a salas</button></div>
-        <div v-if="!myRole&&room.status!=='finished'" class="actions"><button :disabled="busy" @click="join('participant')" :disabled="busy||room.status!=='waiting'">Participar con voz</button><button :disabled="busy" @click="join('spectator')">Entrar como espectador</button></div>
+        <div v-if="!myRole&&room.status!=='finished'" class="actions"><button :disabled="busy||room.status!=='waiting'" @click="join('participant')">Participar con voz</button><button :disabled="busy" @click="join('spectator')">Entrar como espectador</button></div>
         <p v-if="myRole">Tu acceso: <strong>{{ myRole==='participant'?'Participante':'Espectador · solamente chat' }}</strong></p>
         <div v-if="room.status==='waiting'"><p>El moderador puede iniciar cuando todos los participantes estén inscritos. Después únicamente se aceptan espectadores.</p><button v-if="isHost" class="primary" :disabled="busy" @click="runAction('start')">Cerrar inscripciones e iniciar</button></div>
         <div v-if="room.status==='active'" class="speaker"><small>TURNO DE PALABRA</small><h3>{{ speaker?.name||'Sin participantes' }}</h3><strong>{{ countdown }} s</strong><p>La palabra pasa al siguiente Hermano al agotarse el turno o cuando este la cede.</p>
