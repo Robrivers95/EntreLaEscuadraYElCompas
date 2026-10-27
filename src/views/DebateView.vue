@@ -49,10 +49,10 @@ const rooms=ref<DebateRoom[]>([]),room=ref<DebateRoom|null>(null),activeId=ref('
 const draft=ref(''),error=ref(''),busy=ref(false),now=ref(Date.now())
 let stopRooms:(()=>void)|null=null,stopRoom:(()=>void)|null=null,stopChat:(()=>void)|null=null,ticker:ReturnType<typeof setInterval>|null=null
 const degreeLabel=(degree:RoomLevel)=>({aprendiz:'Aprendiz',compañero:'Compañero',maestro:'Maestro',general:'General'})[degree]
-const canEnter=(value:DebateRoom)=>value.level==='general'||allowedChambers.value.includes(value.level)
+const canEnter=(value:DebateRoom)=>value.level==='general'||(value.level!=='general'&&allowedChambers.value.includes(value.level))
 const isHost=computed(()=>room.value?.hostUid===uid.value)
-const myRole=computed(()=>'participant'|'spectator'|null=>room.value?.participants.some(p=>p.uid===uid.value)?'participant':room.value?.spectators.some(p=>p.uid===uid.value)?'spectator':null)
-const speaker=computed(()=>room.value?.participants[room.value.speakerIndex%room.value.participants.length])
+const myRole=computed<'participant'|'spectator'|null>(()=>room.value?.participants.some(p=>p.uid===uid.value)?'participant':room.value?.spectators.some(p=>p.uid===uid.value)?'spectator':null)
+const speaker=computed(()=>room.value?.participants.length?room.value.participants[room.value.speakerIndex%room.value.participants.length]:null)
 const countdown=computed(()=>!room.value?.speakerStartedAt?room.value?.turnSeconds??0:Math.max(0,Math.ceil((room.value.turnSeconds*1000-(now.value-room.value.speakerStartedAt))/1000)))
 const open=(id:string)=>{activeId.value=id}
 watch(activeId,id=>{stopRoom?.();stopChat?.();room.value=null;messages.value=[];if(!id)return;stopRoom=debateService.subscribeRoom(id,v=>room.value=v);stopChat=debateService.subscribeChat(id,v=>messages.value=v)})
