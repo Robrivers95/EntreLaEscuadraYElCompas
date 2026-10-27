@@ -16,6 +16,7 @@
       </section>
 
       <nav class="mode-grid">
+        <button class="mode-card" @click="router.push('/debates')"><span class="roman">IV</span><b>🗣</b><h2>Sala de debate</h2><p>Plantea un tema, abre una Cámara y participa por turnos.</p></button>
         <button class="mode-card active"><span class="roman">I</span><b>🎲</b><h2>Maratón de tablero</h2><p>Jugadores con voz y turnos; invitados observan y participan por chat.</p></button>
         <button class="mode-card" @click="router.push('/duels')"><span class="roman">II</span><b>⚔</b><h2>Reto de 10</h2><p>Reta a otra persona con las mismas diez preguntas.</p></button>
         <button class="mode-card" @click="router.push('/study')"><span class="roman">III</span><b>📖</b><h2>Estudio individual</h2><p>Práctica personal con el mismo banco de preguntas.</p></button>
