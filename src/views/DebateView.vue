@@ -37,7 +37,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { getAllowedDifficulties } from '@/modules/questions/questionRules'
 import { debateService } from '@/modules/debate/debateService'
 import type { DebateRoom, DebateMessage } from '@/modules/debate/debateService'
-import type { MasonicDegree, MasonicRite } from '@/modules/questions/types'
+import type { MasonicRite } from '@/modules/questions/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
 
 const router=useRouter(), auth=useAuthStore()
@@ -49,7 +49,7 @@ const rooms=ref<DebateRoom[]>([]),room=ref<DebateRoom|null>(null),activeId=ref('
 const draft=ref(''),error=ref(''),busy=ref(false),now=ref(Date.now())
 let stopRooms:(()=>void)|null=null,stopRoom:(()=>void)|null=null,stopChat:(()=>void)|null=null,ticker:ReturnType<typeof setInterval>|null=null
 const degreeLabel=(degree:RoomLevel)=>({aprendiz:'Aprendiz',compañero:'Compañero',maestro:'Maestro',general:'General'})[degree]
-const canEnter=(value:DebateRoom)=>value.level==='general'||(value.level!=='general'&&allowedChambers.value.includes(value.level))
+const canEnter=(value:DebateRoom)=>value.level==='general'||allowedChambers.value.includes(value.level)
 const isHost=computed(()=>room.value?.hostUid===uid.value)
 const myRole=computed<'participant'|'spectator'|null>(()=>room.value?.participants.some(p=>p.uid===uid.value)?'participant':room.value?.spectators.some(p=>p.uid===uid.value)?'spectator':null)
 const speaker=computed(()=>room.value?.participants.length?room.value.participants[room.value.speakerIndex%room.value.participants.length]:null)
