@@ -40,7 +40,7 @@
         <form v-if="showCreate" class="create-room" @submit.prevent="createRoom">
           <label>Nombre<input v-model="newRoom.name" maxlength="45" placeholder="Ej. Cámara del Norte" /></label>
           <label>Banco / rito<select v-model="newRoom.rite" @change="syncRoomConfig"><option v-for="rite in playableRites" :key="rite.value" :value="rite.value">{{ rite.label }}</option></select></label>
-          <label v-if="!isOpenKnowledgeBank(newRoom.rite)">Nivel<select v-model="newRoom.level"><option value="aprendiz">Aprendiz</option><option value="compañero">Compañero</option><option value="maestro">Maestro</option></select></label>
+          <label v-if="!isOpenKnowledgeBank(newRoom.rite)">Nivel<select v-model="newRoom.level"><option v-for="degree in allowedChambers" :key="degree" :value="degree">{{ DEGREE_LABELS[degree] }}</option></select></label>
           <label>Jugadores activos<select v-model.number="newRoom.maxPlayers"><option :value="2">2</option><option :value="3">3</option><option :value="4">4</option><option :value="6">6</option><option :value="8">8</option></select></label>
           <label class="private-check"><input v-model="newRoom.isPrivate" type="checkbox" /> Crear oculta del lobby</label>
           <div class="board-rule"><strong>{{ roomConfig.boardSize }} {{ newRoom.rite === 'kabala' ? 'sefirot' : 'casillas' }}</strong><span>{{ roomConfig.boardNote }}</span><span>· hasta {{ ROOM_TOTAL_CAPACITY }} personas contando invitados</span></div>
@@ -80,8 +80,8 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAccessStore } from '@/stores/accessStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/modules/game/lobby/roomService'
-import { DEGREE_LABELS, isOpenKnowledgeBank, MASONIC_RITES, RITE_SHORT_LABELS } from '@/modules/questions/questionRules'
-import { RITE_GAME_CONFIG, requiresAccessExam } from '@/modules/game/access/riteAccess'
+import { DEGREE_LABELS, getAllowedDifficulties, isOpenKnowledgeBank, MASONIC_RITES, RITE_SHORT_LABELS } from '@/modules/questions/questionRules'
+import { RITE_GAME_CONFIG } from '@/modules/game/access/riteAccess'
 import { ROOM_TOTAL_CAPACITY } from '@/modules/game/lobby/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
 import type { BoardRoom } from '@/modules/game/lobby/types'
@@ -100,6 +100,7 @@ const playableRites = MASONIC_RITES.filter((rite) => rite.value !== 'otro')
 const preferredRite = computed(() => accessStore.preferredRite ?? 'reaa')
 const degreeLabel = computed(() => authStore.masonicDegree ? DEGREE_LABELS[authStore.masonicDegree] : 'Sin grado')
 const newRoom = reactive<{ name: string; rite: MasonicRite; level: RoomLevel; maxPlayers: number; isPrivate: boolean }>({ name: '', rite: 'reaa', level: authStore.masonicDegree ?? 'aprendiz', maxPlayers: 4, isPrivate: false })
+const allowedChambers = computed(() => authStore.masonicDegree ? getAllowedDifficulties(authStore.masonicDegree) : [])
 const roomConfig = computed(() => RITE_GAME_CONFIG[newRoom.rite])
 const currentUid = computed(() => authStore.currentUser?.uid || '')
 const filteredRooms = computed(() => roomStore.openRooms.filter((room) => {
@@ -117,9 +118,9 @@ const syncRoomConfig = () => { newRoom.level = isOpenKnowledgeBank(newRoom.rite)
 const shortRite = (rite: MasonicRite) => RITE_SHORT_LABELS[rite]
 const totalPeople = (room: BoardRoom) => room.players.length + room.guests.length
 const isMember = (room: BoardRoom) => Boolean(currentUid.value && (room.playerIds.includes(currentUid.value) || room.guestIds.includes(currentUid.value)))
-const needsExam = (room: BoardRoom) => requiresAccessExam(preferredRite.value, authStore.masonicDegree, room.rite, room.level, accessStore.certificationFor(room.rite))
-const canJoinPlayer = (room: BoardRoom) => !room.isLocked && room.status === 'waiting' && room.players.length < room.maxPlayers && totalPeople(room) < room.maxAttendees
-const canJoinGuest = (room: BoardRoom) => !room.isLocked && room.status !== 'finished' && totalPeople(room) < room.maxAttendees
+const needsExam = (room: BoardRoom) => room.level !== 'general' && (!authStore.masonicDegree || !getAllowedDifficulties(authStore.masonicDegree).includes(room.level))
+const canJoinPlayer = (room: BoardRoom) => !needsExam(room) && !room.isLocked && room.status === 'waiting' && room.players.length < room.maxPlayers && totalPeople(room) < room.maxAttendees
+const canJoinGuest = (room: BoardRoom) => !needsExam(room) && !room.isLocked && room.status !== 'finished' && totalPeople(room) < room.maxAttendees
 
 const setPreferredRite = async (event: Event) => {
   if (authStore.currentUser) await accessStore.setPreferredRite(authStore.currentUser.uid, (event.target as HTMLSelectElement).value as MasonicRite)
@@ -127,6 +128,7 @@ const setPreferredRite = async (event: Event) => {
 
 const createRoom = async () => {
   if (!authStore.currentUser || !authStore.profile) return
+  try {
   const id = await roomStore.createRoom({
     name: newRoom.name,
     hostUid: authStore.currentUser.uid,
@@ -139,6 +141,7 @@ const createRoom = async () => {
     isPrivate: newRoom.isPrivate,
   })
   router.push(`/game/turns?room=${id}`)
+  } catch (error) { joinError.value = error instanceof Error ? error.message : 'No se pudo crear la sala.' }
 }
 
 const joinResolved = async (room: BoardRoom, role: 'player' | 'guest') => {
@@ -159,7 +162,7 @@ const enterRoom = async (room: BoardRoom, role: 'player' | 'guest') => {
   if (!authStore.currentUser || !authStore.profile) return
   if (isMember(room)) { router.push(`/game/turns?room=${room.id}`); return }
   if (needsExam(room)) {
-    router.push({ path: '/reteje', query: { rite: room.rite, level: room.level, room: room.id, role } })
+    joinError.value = 'Tu grado registrado en Mi Logia no permite acceder a esta Cámara.'
     return
   }
   await joinResolved(room, role)
