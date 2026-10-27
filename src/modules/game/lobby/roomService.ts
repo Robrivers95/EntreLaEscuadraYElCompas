@@ -75,6 +75,7 @@ export const roomService = {
       hostUid: input.hostUid,
       hostName: input.hostName,
       rite: input.rite,
+      questionSelection: input.questionSelection === 'mixed' && input.level !== 'general' ? 'mixed' : 'rite',
       level: input.level,
       boardSize: input.boardSize,
       maxPlayers: input.maxPlayers,
