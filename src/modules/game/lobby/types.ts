@@ -2,6 +2,7 @@ import type { MasonicDegree, MasonicRite } from '@/modules/questions/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
 
 export const ROOM_TOTAL_CAPACITY = 20
+export type QuestionSelection = 'rite' | 'mixed'
 
 export interface RoomPlayer {
   uid: string
@@ -25,6 +26,7 @@ export interface BoardRoom {
   hostUid: string
   hostName: string
   rite: MasonicRite
+  questionSelection?: QuestionSelection
   level: RoomLevel
   boardSize: number
   maxPlayers: number
@@ -52,6 +54,7 @@ export interface CreateBoardRoomInput {
   hostName: string
   hostDegree: MasonicDegree | null
   rite: MasonicRite
+  questionSelection?: QuestionSelection
   level: RoomLevel
   boardSize: number
   maxPlayers: number
