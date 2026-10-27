@@ -9,6 +9,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/lobby', name: 'Lobby', component: () => import('@/views/GameSelect.vue'), meta: { requiresAuth: true } },
   { path: '/game-select', redirect: '/lobby' },
   { path: '/reteje', name: 'Reteje', component: () => import('@/views/RetejeView.vue'), meta: { requiresAuth: true } },
+  { path: '/debates', name: 'Debates', component: () => import('@/views/DebateView.vue'), meta: { requiresAuth: true } },
   { path: '/duels', name: 'Duels', component: () => import('@/views/DuelView.vue'), meta: { requiresAuth: true } },
   { path: '/study', name: 'Study', component: () => import('@/views/StudyView.vue'), meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: () => import('@/views/ProfileView.vue'), meta: { requiresAuth: true } },
