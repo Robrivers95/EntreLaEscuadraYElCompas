@@ -81,6 +81,23 @@ export const debateService = {
       tx.update(ref,{speakerIndex:(room.speakerIndex+1)%room.participants.length,speakerStartedAt:Date.now()})
     })
   },
+  /** Idempotent timer rollover. Any registered participant may request it once the turn expires. */
+  async advanceExpiredTurn(id:string,uid:string,expectedStartedAt:number):Promise<boolean> {
+    const ref=doc(db,'debateRooms',id)
+    let advanced=false
+    await runTransaction(db,async tx=>{
+      const snap=await tx.get(ref)
+      if(!snap.exists())return
+      const room=fromDoc(snap.id,snap.data())
+      if(room.status!=='active'||!room.participants.length||room.speakerStartedAt!==expectedStartedAt)return
+      if(!room.participants.some(p=>p.uid===uid))return
+      const now=Date.now()
+      if(now-expectedStartedAt<room.turnSeconds*1000)return
+      tx.update(ref,{speakerIndex:(room.speakerIndex+1)%room.participants.length,speakerStartedAt:now})
+      advanced=true
+    })
+    return advanced
+  },
   async finish(id:string,uid:string) {
     const ref=doc(db,'debateRooms',id)
     await runTransaction(db,async tx=>{
