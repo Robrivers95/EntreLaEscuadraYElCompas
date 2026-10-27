@@ -41,6 +41,7 @@
           <label>Nombre<input v-model="newRoom.name" maxlength="45" placeholder="Ej. Cámara del Norte" /></label>
           <label>Banco / rito<select v-model="newRoom.rite" @change="syncRoomConfig"><option v-for="rite in playableRites" :key="rite.value" :value="rite.value">{{ rite.label }}</option></select></label>
           <label v-if="!isOpenKnowledgeBank(newRoom.rite)">Nivel<select v-model="newRoom.level"><option v-for="degree in allowedChambers" :key="degree" :value="degree">{{ DEGREE_LABELS[degree] }}</option></select></label>
+          <label v-if="!isOpenKnowledgeBank(newRoom.rite)">Preguntas<select v-model="newRoom.questionSelection"><option value="rite">Solo preguntas del rito y Cámara</option><option value="mixed">Mixtas: Cámara + cultura general</option></select></label>
           <label>Jugadores activos<select v-model.number="newRoom.maxPlayers"><option :value="2">2</option><option :value="3">3</option><option :value="4">4</option><option :value="6">6</option><option :value="8">8</option></select></label>
           <label class="private-check"><input v-model="newRoom.isPrivate" type="checkbox" /> Crear oculta del lobby</label>
           <div class="board-rule"><strong>{{ roomConfig.boardSize }} {{ newRoom.rite === 'kabala' ? 'sefirot' : 'casillas' }}</strong><span>{{ roomConfig.boardNote }}</span><span>· hasta {{ ROOM_TOTAL_CAPACITY }} personas contando invitados</span></div>
@@ -54,13 +55,13 @@
         <div v-else class="rooms-grid">
           <article v-for="room in filteredRooms" :key="room.id" class="room-card" :class="{ open: isOpenKnowledgeBank(room.rite), kabala: room.rite === 'kabala', locked: room.isLocked }">
             <div class="room-top"><span class="rite-chip">{{ shortRite(room.rite) }}</span><span class="state">{{ room.isLocked ? '🔒 Cerrada' : room.status === 'waiting' ? '● Esperando' : '▶ En juego' }}</span></div>
-            <h3>{{ room.name }}</h3><p class="host">Líder: {{ room.hostName }}</p>
+            <h3>{{ room.name }}</h3><p class="host">Líder: {{ room.hostName }}</p><p class="host">{{ room.level === 'general' ? 'Cultura general' : `Cámara de ${DEGREE_LABELS[room.level]} · ${room.questionSelection === 'mixed' ? 'Mixta' : 'Solo masónica'}` }}</p>
             <div class="room-stats"><span><b>{{ room.players.length }}/{{ room.maxPlayers }}</b> jugadores</span><span><b>{{ totalPeople(room) }}/{{ room.maxAttendees }}</b> personas</span><span><b>{{ room.guests.length }}</b> invitados</span></div>
-            <p v-if="room.rite === 'kabala'" class="open-note">✦ Árbol de la Vida · sin dado</p><p v-else-if="room.rite === 'libre'" class="open-note">⚠ MODO NO MASÓN · cultura general</p><p v-else-if="needsExam(room)" class="exam-needed">🔐 Este rito/nivel requiere acceso del juego</p>
+            <p v-if="room.rite === 'kabala'" class="open-note">✦ Árbol de la Vida · sin dado</p><p v-else-if="room.rite === 'libre'" class="open-note">⚠ MODO NO MASÓN · cultura general</p><p v-else-if="needsExam(room)" class="exam-needed">🔐 Tu grado no permite entrar en esta Cámara</p>
 
             <div v-if="isMember(room)" class="room-actions single"><button class="primary" @click="router.push(`/game/turns?room=${room.id}`)">Volver a la sala</button></div>
             <div v-else class="room-actions">
-              <button class="primary" :disabled="!canJoinPlayer(room)" @click="enterRoom(room, 'player')">{{ needsExam(room) ? 'Reteje y jugar' : 'Entrar a jugar' }}</button>
+              <button class="primary" :disabled="!canJoinPlayer(room)" @click="enterRoom(room, 'player')">{{ needsExam(room) ? 'Acceso restringido' : 'Entrar a jugar' }}</button>
               <button class="guest-button" :disabled="!canJoinGuest(room)" @click="enterRoom(room, 'guest')">👁 Invitado</button>
             </div>
           </article>
@@ -84,7 +85,7 @@ import { DEGREE_LABELS, getAllowedDifficulties, isOpenKnowledgeBank, MASONIC_RIT
 import { RITE_GAME_CONFIG } from '@/modules/game/access/riteAccess'
 import { ROOM_TOTAL_CAPACITY } from '@/modules/game/lobby/types'
 import type { RoomLevel } from '@/modules/game/access/riteAccess'
-import type { BoardRoom } from '@/modules/game/lobby/types'
+import type { BoardRoom, QuestionSelection } from '@/modules/game/lobby/types'
 import type { MasonicRite } from '@/modules/questions/types'
 
 const router = useRouter()
@@ -99,7 +100,7 @@ const masonicRites = MASONIC_RITES.filter((rite) => rite.masonic && rite.value !
 const playableRites = MASONIC_RITES.filter((rite) => rite.value !== 'otro')
 const preferredRite = computed(() => accessStore.preferredRite ?? 'reaa')
 const degreeLabel = computed(() => authStore.masonicDegree ? DEGREE_LABELS[authStore.masonicDegree] : 'Sin grado')
-const newRoom = reactive<{ name: string; rite: MasonicRite; level: RoomLevel; maxPlayers: number; isPrivate: boolean }>({ name: '', rite: 'reaa', level: authStore.masonicDegree ?? 'aprendiz', maxPlayers: 4, isPrivate: false })
+const newRoom = reactive<{ name: string; rite: MasonicRite; level: RoomLevel; questionSelection: QuestionSelection; maxPlayers: number; isPrivate: boolean }>({ name: '', rite: 'reaa', level: authStore.masonicDegree ?? 'aprendiz', questionSelection: 'rite', maxPlayers: 4, isPrivate: false })
 const allowedChambers = computed(() => authStore.masonicDegree ? getAllowedDifficulties(authStore.masonicDegree) : [])
 const roomConfig = computed(() => RITE_GAME_CONFIG[newRoom.rite])
 const currentUid = computed(() => authStore.currentUser?.uid || '')
@@ -135,6 +136,7 @@ const createRoom = async () => {
     hostName: authStore.profile.name,
     hostDegree: authStore.masonicDegree,
     rite: newRoom.rite,
+    questionSelection: newRoom.questionSelection,
     level: isOpenKnowledgeBank(newRoom.rite) ? 'general' : newRoom.level,
     boardSize: roomConfig.value.boardSize,
     maxPlayers: newRoom.maxPlayers,
