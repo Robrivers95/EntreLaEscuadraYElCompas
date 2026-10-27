@@ -12,6 +12,7 @@ import {
   runTransaction,
   updateDoc,
 } from 'firebase/firestore'
+import type { Transaction } from 'firebase/firestore'
 import type { BoardRoom, CreateBoardRoomInput, RoomGuest, RoomPlayer } from './types'
 import { ROOM_TOTAL_CAPACITY } from './types'
 import { normalizeMiLogiaDegree, getAllowedDifficulties } from '@/modules/questions/questionRules'
@@ -22,7 +23,7 @@ const requireChamberAccess = (degree: MasonicDegree | null, level: BoardRoom['le
   if (!degree || !getAllowedDifficulties(degree).includes(level)) throw new Error('Tu grado registrado en Mi Logia no permite entrar a esta Cámara.')
 }
 
-const verifiedDegree = async (transaction: { get: (ref: ReturnType<typeof doc>) => Promise<{ exists: () => boolean; data: () => Record<string, unknown> }> }, uid: string): Promise<MasonicDegree> => {
+const verifiedDegree = async (transaction: Transaction, uid: string): Promise<MasonicDegree> => {
   const snapshot = await transaction.get(doc(db, 'users', uid))
   const data = snapshot.exists() ? snapshot.data() : null
   const degree = normalizeMiLogiaDegree(typeof data?.degree === 'string' ? data.degree : null)
