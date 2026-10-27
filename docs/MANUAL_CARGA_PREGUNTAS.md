@@ -1,7 +1,7 @@
 # Manual de carga masiva de preguntas
 
 ## Formatos
-CSV UTF-8 con encabezados en la primera fila; XLSX con la primera hoja como tabla equivalente. Una fila por pregunta. No usar celdas combinadas. En CSV, si el texto incluye comas, poner el campo entre comillas dobles. Para comillas interiores, duplicarlas.
+La interfaz actual admite CSV UTF-8 con encabezados en la primera fila. Para un archivo Excel XLSX, abre el libro en Excel y utiliza Archivo → Guardar como → CSV UTF-8 antes de importarlo. Una fila por pregunta. No usar celdas combinadas. En CSV, si el texto incluye comas, poner el campo entre comillas dobles. Para comillas interiores, duplicarlas.
 
 ## Columnas
 - id: identificador único y estable (obligatorio para actualizaciones).
@@ -20,7 +20,7 @@ CSV UTF-8 con encabezados en la primera fila; XLSX con la primera hoja como tabl
 1. Preparar el archivo con la plantilla CSV del repositorio.
 2. Revisar que las preguntas masónicas usen su grado y rito correcto.
 3. Validar formato, preguntas duplicadas por id y respuestas correctas.
-4. Previsualizar antes de confirmar. Actualizar por id cuando exista; nunca duplicar.
+4. Previsualizar antes de confirmar. No se importa ningún registro si hay errores de validación. Se actualiza el registro que contiene la etiqueta import-id:<id>; los demás se agregan.
 5. Verificar el resultado en Estudio y en la Cámara autorizada.
 
-Nota: la interfaz de importación CSV/XLSX aún está pendiente de implementación. Este documento define el contrato previsto y no implica que el botón ya esté disponible.
+La carga CSV con vista previa está implementada en el panel administrativo de esta rama. XLSX directo todavía no está implementado. El registro debe tener permisos de escritura en Firestore; la seguridad de preguntas por grado debe configurarse y verificarse en el servidor antes del despliegue.
