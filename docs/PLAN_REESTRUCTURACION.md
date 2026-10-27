@@ -19,3 +19,10 @@
 - Confirmar el esquema de grados y permisos reales de Mi Logia y probar perfiles de cada grado.
 - Implementar salas de debate y videollamada con moderación en servidor.
 - Ejecutar build, pruebas de acceso, pruebas multijugador y desplegar solo tras validación.
+
+## Avance de Sala de Debate (rama de desarrollo)
+- Implementado: pantalla /debates, creación y listado de salas, inscripción antes del inicio, espectadores después del inicio, reloj visible, cesión de turno, finalización por anfitrión y chat.
+- El tiempo transcurrido se muestra en pantalla, pero el avance automático autorizado por servidor y el silenciamiento forzoso del micrófono NO están implementados.
+- La conexión de audio/video de la sala y los permisos de publicación multimedia NO están implementados.
+- Las comprobaciones de grado de esta versión están en el cliente; faltan reglas de Firebase o Cloud Functions para evitar lecturas, escrituras y suplantación de identidad.
+- Antes del despliegue probar con Aprendiz/Compañero/Maestro, espectadores, reconexión, dos navegadores y controles de privacidad.
