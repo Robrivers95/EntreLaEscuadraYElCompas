@@ -101,7 +101,7 @@ export const useQuestionsStore = defineStore('questions', () => {
     if (category && question.category !== category) return false
     if (isOpenKnowledgeBank(rite)) return question.difficulty === 'general'
     if (level === 'general') return false
-    return isQuestionAllowedForDegree(question.difficulty, level)
+    return question.difficulty === level
   })
 
   const countForRite=(rite:MasonicRite)=>questions.value.filter((question)=>getQuestionRite(question)===rite).length
